@@ -1,0 +1,55 @@
+{
+  "name": "INSA Lyon Hub — Portail Étudiant",
+  "short_name": "INSA Hub",
+  "description": "Portail étudiant centralisé INSA Lyon : Emplois du temps ADE, Notes MonDossierWeb, Menus RU et Vie Associative.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#020617",
+  "theme_color": "#e42313",
+  "lang": "fr-FR",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Emploi du temps",
+      "short_name": "Planning",
+      "url": "/#ade",
+      "description": "Consulter mon planning de cours ADE"
+    },
+    {
+      "name": "Menus Restauration",
+      "short_name": "Menus",
+      "url": "/#restaurants",
+      "description": "Consulter les menus du RI et du CROUS"
+    },
+    {
+      "name": "Mes Notes",
+      "short_name": "Notes",
+      "url": "/#notes",
+      "description": "Consulter mes notes MonDossierWeb"
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>MonDossierWeb - Consultation des notes et résultats Apogée</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; }
+    .notesTable { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+    .notesTable th, .notesTable td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+    .notesTable th { background-color: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Université de Lyon - INSA Lyon</h1>
+    <h2>MonDossierWeb / Apogée</h2>
+  </div>
+
+  <div class="identite">
+    <p>Numéro Étudiant : 00054321 - Nom : MARTIN Alexandre - Filière : Formation d'Ingénieur INSA Lyon - 4IF</p>
+  </div>
+
+  <h3>Semestre 7 - Année Universitaire 2026-2027</h3>
+  <table class="notesTable" summary="Notes du Semestre 7">
+    <thead>
+      <tr>
+        <th>Code Elément</th>
+        <th>Libellé</th>
+        <th>Note Session 1</th>
+        <th>Résultat S1</th>
+        <th>ECTS</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="ue">
+        <td>UE-IF-701</td>
+        <td>Ingénierie du Logiciel & Systèmes Distribués</td>
+        <td>15.20</td>
+        <td>VAL</td>
+        <td>6</td>
+      </tr>
+      <tr class="module">
+        <td>IF-SYS-DIST</td>
+        <td>Systèmes Distribués et Microservices</td>
+        <td>16.00</td>
+        <td>VAL</td>
+        <td></td>
+      </tr>
+      <tr class="module">
+        <td>IF-COMP</td>
+        <td>Compilation et Analyse Statique</td>
+        <td>14.40</td>
+        <td>VAL</td>
+        <td></td>
+      </tr>
+
+      <tr class="ue">
+        <td>UE-IF-702</td>
+        <td>Bases de Données & Data Science</td>
+        <td>15.00</td>
+        <td>VAL</td>
+        <td>6</td>
+      </tr>
+      <tr class="module">
+        <td>IF-BDR</td>
+        <td>Bases de Données Relationnelles Avancées</td>
+        <td>15.50</td>
+        <td>VAL</td>
+        <td></td>
+      </tr>
+      <tr class="module">
+        <td>IF-BIGDATA</td>
+        <td>Architectures Big Data & NoSQL</td>
+        <td>14.50</td>
+        <td>VAL</td>
+        <td></td>
+      </tr>
+
+      <!-- Adversarial case: Non-numeric grade (Absent) in an UE -->
+      <tr class="ue">
+        <td>UE-IF-703</td>
+        <td>Réseaux & Sécurité des Systèmes</td>
+        <td>ABS</td>
+        <td>ABS</td>
+        <td>6</td>
+      </tr>
+      <tr class="module">
+        <td>IF-RES</td>
+        <td>Routage IP & Protocoles de Télécommunication</td>
+        <td>ABS</td>
+        <td>ABS</td>
+        <td></td>
+      </tr>
+      <tr class="module">
+        <td>IF-SEC</td>
+        <td>Cryptographie & Sécurité Applicative</td>
+        <td>ABS</td>
+        <td>ABS</td>
+        <td></td>
+      </tr>
+
+      <!-- Adversarial case: Non-credit course (0 ECTS) -->
+      <tr class="ue">
+        <td>UE-OPT-700</td>
+        <td>Atelier RSE et Bilan Carbone (Non Crédité)</td>
+        <td>14.00</td>
+        <td>VAL</td>
+        <td>0</td>
+      </tr>
+
+      <!-- Adversarial case: Ajourné (AJ) -->
+      <tr class="ue">
+        <td>UE-IF-704</td>
+        <td>Développement Web Avancé</td>
+        <td>08.50</td>
+        <td>AJ</td>
+        <td>6</td>
+      </tr>
+      <tr class="module">
+        <td>IF-WEB</td>
+        <td>Applications Web Modernes & PWA</td>
+        <td>08.50</td>
+        <td>AJ</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>
