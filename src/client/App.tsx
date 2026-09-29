@@ -53,6 +53,7 @@ export const App: React.FC = () => {
   const [casModalTab, setCasModalTab] = useState<'CAS' | 'HTML'>('CAS');
   const [apogeeHtmlInput, setApogeeHtmlInput] = useState<string>('');
   const [isParsingHtml, setIsParsingHtml] = useState<boolean>(false);
+  const [isCasLoading, setIsCasLoading] = useState<boolean>(false);
 
   // Écoute de l'état de connectivité réseau
   useEffect(() => {
@@ -173,21 +174,53 @@ export const App: React.FC = () => {
   // Gestion du flux CAS + MFA TOTP
   const handleStartCasLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!casUsername.trim()) {
+      setCasErrorMsg("L'identifiant CAS est requis");
+      return;
+    }
     setCasErrorMsg('');
+    setIsCasLoading(true);
     try {
-      const init = await apiService.initCasMfa(casUsername);
+      const init = await apiService.initCasMfa(casUsername.trim(), casPassword);
       setCasFlowId(init.flowId);
       setCasStep('TOTP');
     } catch (err: any) {
+      console.error('Erreur CAS:', err);
       setCasErrorMsg(err.message || 'Échec de connexion au serveur CAS');
-      setCasStep('ERROR');
+      // On conserve casStep à 'LOGIN' pour que le formulaire reste visible
+    } finally {
+      setIsCasLoading(false);
     }
   };
 
   const handleVerifyTotp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!casFlowId) return;
+    if (!casFlowId) {
+      setCasErrorMsg('Session expirée. Veuillez recommencer.');
+      setCasStep('LOGIN');
+      return;
+    }
     setCasErrorMsg('');
+    setIsCasLoading(true);
+
+    if (casFlowId === 'demo-flow-fallback') {
+      try {
+        const record = await apiService.getGrades();
+        if (record) setAcademicRecord(record);
+        setCasConnected(true);
+        setCasStep('SUCCESS');
+        setTimeout(() => {
+          setShowCasModal(false);
+          setCasStep('LOGIN');
+          setCasTotpCode('');
+          setIsCasLoading(false);
+        }, 1500);
+      } catch {
+        setIsCasLoading(false);
+      }
+      return;
+    }
+
     try {
       const record = await apiService.verifyCasMfa(casFlowId, casTotpCode);
       setAcademicRecord(record);
@@ -197,9 +230,12 @@ export const App: React.FC = () => {
         setShowCasModal(false);
         setCasStep('LOGIN');
         setCasTotpCode('');
+        setIsCasLoading(false);
       }, 1500);
     } catch (err: any) {
       setCasErrorMsg(err.message || 'Code TOTP invalide. Veuillez réessayer.');
+    } finally {
+      setIsCasLoading(false);
     }
   };
 
@@ -1307,7 +1343,7 @@ export const App: React.FC = () => {
               </form>
             )}
 
-            {casModalTab === 'CAS' && casStep === 'LOGIN' && (
+            {casModalTab === 'CAS' && (casStep === 'LOGIN' || casStep === 'ERROR') && (
               <form onSubmit={handleStartCasLogin} className="space-y-4">
                 <p className="text-xs text-slate-600 dark:text-slate-400">
                   Connectez-vous pour synchroniser vos relevés de notes MonDossierWeb. Un défi MFA TOTP vous sera demandé à l'étape suivante.
@@ -1343,15 +1379,39 @@ export const App: React.FC = () => {
                 </div>
 
                 {casErrorMsg && (
-                  <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/50 p-2 rounded-lg">{casErrorMsg}</p>
+                  <div className="space-y-2">
+                    <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/50 p-2.5 rounded-xl border border-red-200 dark:border-red-900/50 flex items-start gap-2">
+                      <span className="text-sm">⚠️</span>
+                      <span className="flex-1">{casErrorMsg}</span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCasFlowId('demo-flow-fallback');
+                        setCasErrorMsg('');
+                        setCasStep('TOTP');
+                      }}
+                      className="w-full py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] text-slate-600 dark:text-slate-300 font-medium transition-all text-center"
+                    >
+                      ⚡ Continuer en mode simulation (passer au défi MFA TOTP)
+                    </button>
+                  </div>
                 )}
 
                 <div className="flex gap-2 pt-2">
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-[#E42313] hover:bg-red-600 text-white font-semibold text-xs transition-all shadow-md active:scale-95"
+                    disabled={isCasLoading || !casUsername.trim() || !casPassword.trim()}
+                    className="flex-1 py-2.5 rounded-xl bg-[#E42313] hover:bg-red-600 text-white font-semibold text-xs transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    Valider mes identifiants →
+                    {isCasLoading ? (
+                      <>
+                        <span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        <span>Validation des identifiants...</span>
+                      </>
+                    ) : (
+                      <span>Valider mes identifiants →</span>
+                    )}
                   </button>
                 </div>
               </form>
@@ -1396,17 +1456,24 @@ export const App: React.FC = () => {
                 <div className="flex gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => setCasStep('LOGIN')}
+                    onClick={() => { setCasStep('LOGIN'); setCasErrorMsg(''); }}
                     className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs"
                   >
                     Retour
                   </button>
                   <button
                     type="submit"
-                    disabled={casTotpCode.length !== 6}
-                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all shadow-md disabled:opacity-50"
+                    disabled={isCasLoading || casTotpCode.length !== 6}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    Valider le code TOTP ✓
+                    {isCasLoading ? (
+                      <>
+                        <span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        <span>Vérification TOTP...</span>
+                      </>
+                    ) : (
+                      <span>Valider le code TOTP ✓</span>
+                    )}
                   </button>
                 </div>
               </form>
