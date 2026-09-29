@@ -18,6 +18,7 @@ yarn-error.log*
 # System & IDE files
 .DS_Store
 .agents/
+.vercel/
 .idea/
 .vscode/
 *.swp

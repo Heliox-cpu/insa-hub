@@ -76,6 +76,34 @@ L'application unifiée est alors accessible sur [http://localhost:3000](http://l
 
 ---
 
+## ▲ Déploiement sur Vercel
+
+L'application est entièrement configurée pour un déploiement "Zero-Config" sur **Vercel** combinant le frontend PWA (Vite) et l'API Express sous forme de fonctions serverless :
+
+### Méthode 1 : Via Vercel CLI (Ligne de commande)
+```bash
+# 1. Connexion à votre compte Vercel (si ce n'est pas déjà fait)
+npx vercel login
+
+# 2. Déployer en prévisualisation (Preview)
+npm run deploy:vercel
+
+# 3. Déployer directement en production (Production URL)
+npm run deploy:vercel:prod
+```
+
+### Méthode 2 : Via GitHub / Vercel Dashboard
+1. Poussez votre dépôt sur GitHub.
+2. Rendez-vous sur [vercel.com/new](https://vercel.com/new) et importez votre dépôt.
+3. Vercel détecte automatiquement la configuration grâce à `vercel.json` :
+   - **Framework Preset** : Vite
+   - **Build Command** : `npm run build:client`
+   - **Output Directory** : `dist/client`
+   - **Serverless API** : Gérée automatiquement via `api/index.ts` et `api/[...path].ts`
+4. Cliquez sur **Deploy**.
+
+---
+
 ## 🧪 Validation & Tests
 
 Le projet intègre une couverture de tests automatisée exhaustive :
