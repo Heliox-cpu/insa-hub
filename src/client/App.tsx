@@ -43,13 +43,23 @@ export const App: React.FC = () => {
   const [adeUrlInput, setAdeUrlInput] = useState<string>(() => apiService.getAdeUrl());
 
   // État du flux CAS + MFA
-  const [casUsername, setCasUsername] = useState<string>('alexandre.martin');
-  const [casPassword, setCasPassword] = useState<string>('••••••••••••');
+  const [casUsername, setCasUsername] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('insa_hub_cas_username') || '';
+    }
+    return '';
+  });
+  const [casPassword, setCasPassword] = useState<string>('');
   const [casFlowId, setCasFlowId] = useState<string | null>(null);
   const [casTotpCode, setCasTotpCode] = useState<string>('');
   const [casStep, setCasStep] = useState<'LOGIN' | 'TOTP' | 'SUCCESS' | 'ERROR'>('LOGIN');
   const [casErrorMsg, setCasErrorMsg] = useState<string>('');
-  const [casConnected, setCasConnected] = useState<boolean>(false);
+  const [casConnected, setCasConnected] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('insa_hub_cas_authenticated') === 'true';
+    }
+    return false;
+  });
   const [casModalTab, setCasModalTab] = useState<'CAS' | 'HTML'>('CAS');
   const [apogeeHtmlInput, setApogeeHtmlInput] = useState<string>('');
   const [isParsingHtml, setIsParsingHtml] = useState<boolean>(false);
@@ -90,7 +100,8 @@ export const App: React.FC = () => {
       setRestaurants(restos);
       if (grades) {
         setAcademicRecord(grades);
-        setCasConnected(true);
+        const isAuth = typeof window !== 'undefined' && localStorage.getItem('insa_hub_cas_authenticated') === 'true';
+        setCasConnected(isAuth);
       }
       setVaEvents(eventsVa);
       setVaDirectory(directoryVa);
@@ -178,6 +189,9 @@ export const App: React.FC = () => {
       setCasErrorMsg("L'identifiant CAS est requis");
       return;
     }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('insa_hub_cas_username', casUsername.trim());
+    }
     setCasErrorMsg('');
     setIsCasLoading(true);
     try {
@@ -205,9 +219,15 @@ export const App: React.FC = () => {
 
     if (casFlowId === 'demo-flow-fallback') {
       try {
-        const record = await apiService.getGrades();
-        if (record) setAcademicRecord(record);
-        setCasConnected(true);
+        const record = await apiService.getSampleGrades();
+        if (record) {
+          apiService.saveEncryptedMdwRecord(record);
+          setAcademicRecord(record);
+          setCasConnected(true);
+          if (record.semesters && record.semesters.length > 0) {
+            setSelectedSemester(record.semesters[0].semesterNumber);
+          }
+        }
         setCasStep('SUCCESS');
         setTimeout(() => {
           setShowCasModal(false);
@@ -225,6 +245,9 @@ export const App: React.FC = () => {
       const record = await apiService.verifyCasMfa(casFlowId, casTotpCode);
       setAcademicRecord(record);
       setCasConnected(true);
+      if (record.semesters && record.semesters.length > 0) {
+        setSelectedSemester(record.semesters[0].semesterNumber);
+      }
       setCasStep('SUCCESS');
       setTimeout(() => {
         setShowCasModal(false);
@@ -237,6 +260,14 @@ export const App: React.FC = () => {
     } finally {
       setIsCasLoading(false);
     }
+  };
+
+  const handleCasLogout = () => {
+    apiService.logoutCas();
+    setAcademicRecord(null);
+    setCasConnected(false);
+    setCasStep('LOGIN');
+    setShowCasModal(false);
   };
 
   const handleImportApogeeHtml = async (e: React.FormEvent) => {
@@ -352,10 +383,10 @@ export const App: React.FC = () => {
                   }`}
                 />
                 <span className="text-slate-700 dark:text-slate-300 hidden sm:inline">
-                  {casConnected ? 'CAS: Connecté (MFA ✓)' : 'Connexion CAS + MFA'}
+                  {casConnected && academicRecord ? `${academicRecord.name.split(' ')[0]} (CAS ✓)` : (casConnected ? 'CAS: Connecté (MFA ✓)' : 'Connexion CAS + MFA')}
                 </span>
                 <span className="text-slate-700 dark:text-slate-300 sm:hidden">
-                  {casConnected ? 'CAS ✓' : 'CAS'}
+                  {casConnected ? (academicRecord ? academicRecord.name.split(' ')[0] : 'CAS ✓') : 'CAS'}
                 </span>
               </button>
 
@@ -405,13 +436,17 @@ export const App: React.FC = () => {
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold mb-2 border border-white/20">
                     <span>📅 Mardi 29 Septembre 2026</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    <span>Semestre 7 — Département IF</span>
+                    <span>{academicRecord?.program || 'Portail Étudiant INSA Lyon'}</span>
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                    Bonjour {academicRecord ? academicRecord.name.split(' ')[0] : 'Alexandre'} 👋
+                    Bonjour {academicRecord ? academicRecord.name.split(' ')[0] : 'Étudiant'} 👋
                   </h1>
                   <p className="text-white/80 text-sm mt-1">
-                    Vous avez <strong className="text-white">{currentDayEvents.length} cours prévus</strong>, le RI sert votre menu favori ce midi, et 2 événements sont annoncés sur le campus ce soir.
+                    {casConnected && academicRecord ? (
+                      <>Connecté en tant que <strong className="text-white">{academicRecord.name}</strong> • Relevé MonDossierWeb synchronisé.</>
+                    ) : (
+                      <>Vous avez <strong className="text-white">{currentDayEvents.length} cours prévus</strong>, le RI sert votre menu favori ce midi, et 2 événements sont annoncés sur le campus ce soir.</>
+                    )}
                   </p>
                 </div>
                 <button
@@ -481,19 +516,34 @@ export const App: React.FC = () => {
                   <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-blue-500"></span> Moyenne générale (MDW)
                   </span>
-                  <span className="text-slate-400 text-[11px]">S7 Validé</span>
+                  <span className="text-slate-400 text-[11px]">
+                    {currentSemesterTranscript?.juryDecision || (currentSemesterTranscript ? `Semestre ${currentSemesterTranscript.semesterNumber}` : (casConnected ? 'Synchronisé' : 'Non connecté'))}
+                  </span>
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                    {currentSemesterTranscript?.average ? currentSemesterTranscript.average.toFixed(2) : '14.88'}
+                    {currentSemesterTranscript?.average ? currentSemesterTranscript.average.toFixed(2) : (academicRecord ? 'En attente' : '—')}
                   </span>
-                  <span className="text-xs text-slate-400">/ 20</span>
-                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-medium">
-                    30 ECTS
-                  </span>
+                  {currentSemesterTranscript?.average ? <span className="text-xs text-slate-400">/ 20</span> : null}
+                  {currentSemesterTranscript ? (
+                    <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-medium">
+                      {currentSemesterTranscript.acquiredEcts} ECTS
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                  Dernière note : Systèmes Distribués (16.0)
+                  {(() => {
+                    const firstModule = currentSemesterTranscript?.teachingUnits
+                      ?.flatMap((u) => u.modules)
+                      ?.find((m) => m.grade !== undefined);
+                    if (firstModule && firstModule.grade !== undefined) {
+                      return `Dernière note : ${firstModule.name} (${firstModule.grade}/20)`;
+                    }
+                    if (academicRecord) {
+                      return `Étudiant : ${academicRecord.name}`;
+                    }
+                    return 'Cliquez pour vous connecter via CAS Keycloak';
+                  })()}
                 </p>
               </div>
 
@@ -1241,6 +1291,28 @@ export const App: React.FC = () => {
               </div>
             </div>
 
+            {/* Statut de session si déjà connecté */}
+            {casConnected && academicRecord && casStep === 'LOGIN' && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-emerald-800 dark:text-emerald-200 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>{academicRecord.name}</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                    N° {academicRecord.studentNumber} • {academicRecord.program}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCasLogout}
+                  className="px-2.5 py-1 rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-950 dark:hover:bg-red-900 text-red-700 dark:text-red-300 text-[11px] font-semibold transition-all"
+                >
+                  Déconnexion
+                </button>
+              </div>
+            )}
+
             {/* Onglets de mode : CAS Keycloak ou Import HTML direct */}
             {casStep !== 'SUCCESS' && (
               <div className="flex p-1 mb-4 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -1351,11 +1423,12 @@ export const App: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Identifiant CAS (ex: amartin)
+                    Identifiant CAS (ex: awilliame)
                   </label>
                   <input
                     type="text"
                     required
+                    placeholder="Identifiant CAS (ex: awilliame)"
                     value={casUsername}
                     onChange={(e) => setCasUsername(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:ring-2 focus:ring-red-500 outline-none"
@@ -1369,6 +1442,7 @@ export const App: React.FC = () => {
                   <input
                     type="password"
                     required
+                    placeholder="Votre mot de passe INSA"
                     value={casPassword}
                     onChange={(e) => setCasPassword(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:ring-2 focus:ring-red-500 outline-none"
@@ -1484,7 +1558,11 @@ export const App: React.FC = () => {
                 <span className="text-4xl animate-bounce">🎉</span>
                 <h4 className="text-base font-bold text-slate-900 dark:text-white">Authentification réussie !</h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Vos notes MonDossierWeb ont été synchronisées et chiffrées localement dans votre navigateur.
+                  {academicRecord ? (
+                    <>Connecté en tant que <strong className="text-slate-800 dark:text-slate-200">{academicRecord.name}</strong> ({academicRecord.studentNumber}). Vos notes MonDossierWeb ont été synchronisées.</>
+                  ) : (
+                    <>Vos notes MonDossierWeb ont été synchronisées et chiffrées localement dans votre navigateur.</>
+                  )}
                 </p>
               </div>
             )}

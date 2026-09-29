@@ -149,27 +149,33 @@ export const apiService = {
 
   async getGrades(): Promise<StudentAcademicRecord | null> {
     // 1. Tenter la lecture du cache local d'abord (offline-first)
-    const cached = this.getEncryptedMdwRecord();
-    if (cached) return cached;
+    return this.getEncryptedMdwRecord();
+  },
 
-    // 2. Sinon interroger l'API
+  async getSampleGrades(): Promise<StudentAcademicRecord | null> {
     try {
       const res = await fetch(`${API_BASE}/mdw/grades`);
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const json = await res.json();
-      if (json.data) {
-        this.saveEncryptedMdwRecord(json.data);
-        return json.data;
-      }
+      return json.data || null;
     } catch {
-      // mode hors ligne
+      return null;
     }
-    return cached;
+  },
+
+  logoutCas(): void {
+    try {
+      localStorage.removeItem(MDW_CACHE_KEY);
+      localStorage.removeItem('insa_hub_cas_authenticated');
+    } catch {
+      // ignore
+    }
   },
 
   saveEncryptedMdwRecord(record: StudentAcademicRecord): void {
     try {
       localStorage.setItem(MDW_CACHE_KEY, JSON.stringify(record));
+      localStorage.setItem('insa_hub_cas_authenticated', 'true');
     } catch {
       // stockage indisponible
     }

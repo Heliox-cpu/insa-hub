@@ -3,6 +3,7 @@ const SENSITIVE_KEY_PATTERNS = [
   /pwd/i,
   /secret/i,
   /token/i,
+  /ticket/i,
   /otp/i,
   /totp/i,
   /mfa/i,
@@ -66,6 +67,11 @@ export function sanitizeUrl(url: string): string {
     pathname = pathname.replace(/(~[^!:]+![0-9]+:)[a-zA-Z0-9_-]+/g, '$1[REDACTED]');
     return pathname + (params.toString() ? `?${params.toString()}` : '');
   } catch {
-    return url;
+    let fallback = url;
+    for (const pattern of SENSITIVE_KEY_PATTERNS) {
+      fallback = fallback.replace(new RegExp(`([?&][^=&]*${pattern.source}[^=&]*=)[^&]*`, 'gi'), '$1[REDACTED]');
+    }
+    fallback = fallback.replace(/(~[^!:]+![0-9]+:)[a-zA-Z0-9_-]+/g, '$1[REDACTED]');
+    return fallback;
   }
 }

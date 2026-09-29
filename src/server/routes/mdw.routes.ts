@@ -1,7 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import {
   initCasMfaSession,
+  initCasSessionAsync,
   verifyCasMfaChallenge,
+  verifyCasMfaChallengeAsync,
   parseApogeeHtml,
   getSampleAcademicRecord,
 } from '../services/mdw.service.js';
@@ -31,7 +33,7 @@ mdwRouter.get('/', (_req: Request, res: Response) => {
  * Body: { username: string, password?: string }
  * Note: Password is NEVER saved or persisted.
  */
-mdwRouter.post('/auth/init', (req: Request, res: Response, next: NextFunction) => {
+mdwRouter.post('/auth/init', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { username, password } = req.body;
     if (!username || typeof username !== 'string' || username.trim() === '') {
@@ -42,7 +44,7 @@ mdwRouter.post('/auth/init', (req: Request, res: Response, next: NextFunction) =
       return;
     }
 
-    const sessionInit = initCasMfaSession(username, password);
+    const sessionInit = await initCasSessionAsync(username, password);
     res.status(200).json({
       success: true,
       ...sessionInit,
@@ -64,7 +66,7 @@ mdwRouter.post('/auth/init', (req: Request, res: Response, next: NextFunction) =
  * POST /api/mdw/auth/verify
  * Body: { flowId: string, totpCode: string }
  */
-mdwRouter.post('/auth/verify', (req: Request, res: Response, next: NextFunction) => {
+mdwRouter.post('/auth/verify', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { flowId, totpCode } = req.body;
 
@@ -84,7 +86,7 @@ mdwRouter.post('/auth/verify', (req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    const verification = verifyCasMfaChallenge(flowId, totpCode);
+    const verification = await verifyCasMfaChallengeAsync(flowId, totpCode);
 
     if (!verification.success) {
       res.status(400).json({
