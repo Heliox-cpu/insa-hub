@@ -240,16 +240,17 @@ export function parseApogeeHtml(html: string): StudentAcademicRecord {
   let studentName = 'Étudiant INSA';
   let program = 'Formation d’Ingénieur INSA Lyon';
 
-  const numMatch = html.match(/(?:Numéro Étudiant|N° Étudiant|Code Étudiant)\s*[:]\s*([0-9A-Za-z]+)/i);
+  const numMatch = html.match(/(?:Numéro\s*(?:d['’])?[EÉé]tudiant|N°\s*(?:d['’])?[EÉé]tudiant|Code\s*[EÉé]tudiant|Identifiant|Matricule)\s*[:\s]\s*([0-9A-Za-z]+)/i);
   if (numMatch) studentNumber = numMatch[1].trim();
 
-  const nameMatch = html.match(/\bNom\s*[:]\s*([^<–-]+)/i);
+  const nameMatch = html.match(/\bNom(?:\s*et\s*Pr[ée]nom|\s*\/\s*Pr[ée]nom)?\s*[:]\s*([^<–-]+)/i)
+    || html.match(/\bIdentit[ée]\s*[:]\s*([^<–-]+)/i);
   if (nameMatch) {
     // Nettoyer d'éventuelles balises HTML ou scripts injectés
     studentName = nameMatch[1].replace(/<[^>]+>/g, '').trim();
   }
 
-  const progMatch = html.match(/(?:Étape|Cursus|Filière)\s*[:]\s*([^<–-]+)/i);
+  const progMatch = html.match(/(?:[EÉé]tape|Cursus|Fili[èe]re|Dipl[ôo]me|Formation|Inscrit\s*en)\s*[:]\s*([^<\n\r–-]+)/i);
   if (progMatch) {
     program = progMatch[1].replace(/<[^>]+>/g, '').trim();
   }
@@ -457,7 +458,14 @@ function toAbsoluteUrl(urlStr: string, baseUrl = 'https://mondossierweb.insa-lyo
 }
 
 function updateCookieJar(jar: Map<string, string>, response: Response) {
-  const setCookies = response.headers.getSetCookie ? response.headers.getSetCookie() : [];
+  let setCookies: string[] = [];
+  if (typeof (response.headers as any).getSetCookie === 'function') {
+    setCookies = (response.headers as any).getSetCookie();
+  }
+  if (!setCookies || setCookies.length === 0) {
+    const raw = response.headers.get('set-cookie');
+    if (raw) setCookies = [raw];
+  }
   for (const c of setCookies) {
     const [pair] = c.split(';');
     const eqIdx = pair.indexOf('=');
@@ -691,6 +699,18 @@ export function verifyCasMfaChallenge(
 
   // Nom formaté et personnalisé selon l'identifiant CAS de l'étudiant
   const displayName = formatStudentDisplayName(username ? '' : 'Alexandre Martin', username);
+  if (username && !username.toLowerCase().includes('martin')) {
+    return {
+      success: true,
+      record: {
+        studentNumber: '',
+        name: displayName,
+        program: 'Élève-Ingénieur INSA Lyon',
+        semesters: [],
+        lastSyncTimestamp: new Date().toISOString(),
+      },
+    };
+  }
   const record = getSampleAcademicRecord('00054321', displayName);
 
   return {
@@ -872,26 +892,16 @@ export async function verifyCasMfaChallengeAsync(
         const displayName = formatStudentDisplayName(parsedRecord.name, username);
         parsedRecord.name = displayName;
 
-        // Si le relevé contient des semestres réels extraits
-        if (parsedRecord.semesters.length > 0) {
-          return {
-            success: true,
-            record: parsedRecord,
-          };
+        if (!parsedRecord.program || parsedRecord.program === 'Formation d’Ingénieur INSA Lyon') {
+          parsedRecord.program = 'Élève-Ingénieur INSA Lyon';
+        }
+        if (parsedRecord.studentNumber === '00000000') {
+          parsedRecord.studentNumber = '';
         }
 
-        // Si MonDossierWeb n'affiche pas encore de tableau de notes pour cette session,
-        // retourner le profil personnalisé de l'étudiant
-        const fallbackRecord = getSampleAcademicRecord(
-          parsedRecord.studentNumber !== '00000000' ? parsedRecord.studentNumber : '00054321',
-          displayName
-        );
-        if (parsedRecord.program && parsedRecord.program !== 'Formation d’Ingénieur INSA Lyon') {
-          fallbackRecord.program = parsedRecord.program;
-        }
         return {
           success: true,
-          record: fallbackRecord,
+          record: parsedRecord,
         };
       }
     } catch (err: any) {

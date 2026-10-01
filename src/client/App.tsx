@@ -144,32 +144,46 @@ export const App: React.FC = () => {
     setIsLoading(true);
     try {
       const adeUrl = apiService.getAdeUrl();
-      const [events, slots, restos, grades, eventsVa, directoryVa] = await Promise.all([
-        apiService.getAdeEvents({ url: adeUrl }),
-        apiService.getFreeSlots(selectedDate, adeUrl),
+      const promises: [
+        Promise<AdeCourseEvent[]>,
+        Promise<FreeTimeSlot[]>,
+        Promise<CampusRestaurant[]>,
+        Promise<StudentAcademicRecord | null>,
+        Promise<VaEvent[]>,
+        Promise<StudentAssociation[]>
+      ] = [
+        adeUrl ? apiService.getAdeEvents({ url: adeUrl }) : Promise.resolve([]),
+        adeUrl ? apiService.getFreeSlots(selectedDate, adeUrl) : Promise.resolve([]),
         apiService.getCampusRestaurants(dietaryFilters),
         apiService.getGrades(),
         apiService.getVaEvents(),
         apiService.getVaDirectory(),
-      ]);
+      ];
+      const [events, slots, restos, grades, eventsVa, directoryVa] = await Promise.all(promises);
 
-      if (events && events.length > 0) {
-        setAdeEvents(events);
-      } else {
-        const fallbackEvents = await apiService.getAdeEvents();
-        if (fallbackEvents && fallbackEvents.length > 0) setAdeEvents(fallbackEvents);
-      }
-      setFreeSlots(slots);
-      setRestaurants(restos);
+      setAdeEvents(events || []);
+      setFreeSlots(slots || []);
+      if (restos && restos.length > 0) setRestaurants(restos);
+      if (eventsVa && eventsVa.length > 0) setVaEvents(eventsVa);
+      if (directoryVa && directoryVa.length > 0) setVaDirectory(directoryVa);
+
       if (grades) {
-        setAcademicRecord(grades);
-        setCasConnected(true);
+        // Nettoyer d'éventuelles données mock 4IF polluées dans le cache lors d'une session antérieure
+        if (grades.program === '4ème année Informatique (4IF)' && casUsername && !casUsername.toLowerCase().includes('martin')) {
+          apiService.logoutCas();
+          setAcademicRecord(null);
+          setCasConnected(false);
+        } else {
+          setAcademicRecord(grades);
+          setCasConnected(true);
+          if (grades.semesters && grades.semesters.length > 0) {
+            setSelectedSemester(grades.semesters[0].semesterNumber);
+          }
+        }
       } else {
         setAcademicRecord(null);
         setCasConnected(false);
       }
-      setVaEvents(eventsVa);
-      setVaDirectory(directoryVa);
     } catch {
       // Rebondissement silencieux avec les données en cache
     } finally {
@@ -179,7 +193,12 @@ export const App: React.FC = () => {
 
   // Recharger les créneaux libres si la date change
   useEffect(() => {
-    apiService.getFreeSlots(selectedDate, apiService.getAdeUrl()).then(setFreeSlots);
+    const adeUrl = apiService.getAdeUrl();
+    if (adeUrl) {
+      apiService.getFreeSlots(selectedDate, adeUrl).then(setFreeSlots);
+    } else {
+      setFreeSlots([]);
+    }
   }, [selectedDate]);
 
   // Bascule du mode sombre / clair sans FOUC
@@ -356,16 +375,21 @@ export const App: React.FC = () => {
         }
       }
 
-      // Recharger immédiatement ADE pour actualiser l'emploi du temps
+      // Recharger immédiatement ADE pour actualiser l'emploi du temps si configuré
       const adeUrl = apiService.getAdeUrl();
-      const [events, slots] = await Promise.all([
-        apiService.getAdeEvents({ url: adeUrl || undefined }),
-        apiService.getFreeSlots(selectedDate, adeUrl || undefined),
-      ]);
-      if (events && events.length > 0) {
-        setAdeEvents(events);
+      if (adeUrl) {
+        const [events, slots] = await Promise.all([
+          apiService.getAdeEvents({ url: adeUrl }),
+          apiService.getFreeSlots(selectedDate, adeUrl),
+        ]);
+        if (events && events.length > 0) {
+          setAdeEvents(events);
+        }
+        setFreeSlots(slots);
+      } else {
+        setAdeEvents([]);
+        setFreeSlots([]);
       }
-      setFreeSlots(slots);
 
       setCasStep('SUCCESS');
       setTimeout(() => {
@@ -576,7 +600,7 @@ export const App: React.FC = () => {
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold mb-2 border border-white/20">
                     <span>📅 {formatFullFrenchDate()}</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    <span>{casConnected && academicRecord ? academicRecord.program : 'Portail Étudiant INSA'}</span>
+                    <span>{casConnected && academicRecord ? (academicRecord.program || 'Élève-Ingénieur INSA Lyon') : 'Portail Étudiant INSA'}</span>
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                     {casConnected && academicRecord
@@ -585,12 +609,21 @@ export const App: React.FC = () => {
                   </h1>
                   <p className="text-white/80 text-sm mt-1">
                     {casConnected && academicRecord
-                      ? `Connecté via CAS Keycloak (${academicRecord.name}) • Relevé MonDossierWeb & ADE synchronisés.`
+                      ? `Connecté via CAS Keycloak (${academicRecord.name}) • ${apiService.getAdeUrl() ? 'Relevé MonDossierWeb & ADE synchronisés.' : 'Relevé MonDossierWeb synchronisé (ADE à configurer).'}`
                       : 'Centralisez vos emplois du temps ADE, notes MonDossierWeb, menus et vie associative.'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {!casConnected && (
+                  {casConnected ? (
+                    <button
+                      onClick={handleCasLogout}
+                      className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95 border border-white/20"
+                      title="Se déconnecter de la session CAS"
+                    >
+                      <span>🔓</span>
+                      <span>Déconnexion</span>
+                    </button>
+                  ) : (
                     <button
                       onClick={() => setShowCasModal(true)}
                       className="px-4 py-2.5 rounded-xl bg-white text-[#E42313] hover:bg-slate-100 font-bold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95"
@@ -632,16 +665,16 @@ export const App: React.FC = () => {
                 <div className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-red-500 transition-colors">
                   {currentDayEvents[0]
                     ? `${currentDayEvents[0].subjectCode} (${currentDayEvents[0].courseType})`
-                    : currentDayEvents.length === 0 && adeEvents.length > 0
+                    : apiService.getAdeUrl()
                     ? 'Aucun cours aujourd’hui'
                     : 'Planning non configuré'}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
                   {currentDayEvents[0]
                     ? currentDayEvents[0].location
-                    : adeEvents.length > 0
+                    : apiService.getAdeUrl()
                     ? 'Journée libre ou révisions'
-                    : 'Cliquez pour configurer votre flux ADE'}
+                    : 'Cliquez pour renseigner votre URL ADE'}
                 </p>
               </div>
 
@@ -676,32 +709,43 @@ export const App: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-blue-500"></span> Notes & Scolarité (MDW)
                   </span>
                   <span className="text-slate-400 text-[11px]">
-                    {academicRecord ? (currentSemesterTranscript?.juryDecision || 'En cours') : 'Non connecté'}
+                    {casConnected ? (currentSemesterTranscript?.juryDecision || 'Relevé synchronisé') : 'Non connecté'}
                   </span>
                 </div>
-                {academicRecord && currentSemesterTranscript ? (
-                  <>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                        {currentSemesterTranscript.average !== undefined ? currentSemesterTranscript.average.toFixed(2) : '--'}
-                      </span>
-                      <span className="text-xs text-slate-400">/ 20</span>
-                      <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-medium">
-                        {currentSemesterTranscript.acquiredEcts} / {currentSemesterTranscript.totalEcts} ECTS
-                      </span>
+                {casConnected && academicRecord ? (
+                  currentSemesterTranscript ? (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                          {currentSemesterTranscript.average !== undefined ? currentSemesterTranscript.average.toFixed(2) : '--'}
+                        </span>
+                        <span className="text-xs text-slate-400">/ 20</span>
+                        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-medium">
+                          {currentSemesterTranscript.acquiredEcts} / {currentSemesterTranscript.totalEcts} ECTS
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+                        {(() => {
+                          const firstModule = currentSemesterTranscript.teachingUnits
+                            ?.flatMap((u) => u.modules)
+                            ?.find((m) => m.grade !== undefined);
+                          if (firstModule && firstModule.grade !== undefined) {
+                            return `Dernière note : ${firstModule.name} (${firstModule.grade}/20)`;
+                          }
+                          return `${currentSemesterTranscript.teachingUnits.length} UEs enregistrées`;
+                        })()}
+                      </p>
+                    </>
+                  ) : (
+                    <div className="py-1">
+                      <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Aucune note publiée
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        MonDossierWeb synchronisé (0 note)
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                      {(() => {
-                        const firstModule = currentSemesterTranscript.teachingUnits
-                          ?.flatMap((u) => u.modules)
-                          ?.find((m) => m.grade !== undefined);
-                        if (firstModule && firstModule.grade !== undefined) {
-                          return `Dernière note : ${firstModule.name} (${firstModule.grade}/20)`;
-                        }
-                        return `${currentSemesterTranscript.teachingUnits.length} UEs enregistrées`;
-                      })()}
-                    </p>
-                  </>
+                  )
                 ) : (
                   <div className="py-1">
                     <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
@@ -753,7 +797,19 @@ export const App: React.FC = () => {
                   </button>
                 </div>
                 {currentDayEvents.length === 0 ? (
-                  <p className="text-xs text-slate-500 text-center py-6">Aucun cours pour cette journée.</p>
+                  <div className="text-center py-6">
+                    <p className="text-xs text-slate-500">
+                      {apiService.getAdeUrl() ? 'Aucun cours pour cette journée.' : 'Emploi du temps non configuré.'}
+                    </p>
+                    {!apiService.getAdeUrl() && (
+                      <button
+                        onClick={() => setShowAdeModal(true)}
+                        className="mt-2 inline-flex items-center gap-1 text-xs text-[#E42313] hover:underline font-semibold"
+                      >
+                        <span>⚙️ Configurer mon URL ADE →</span>
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {currentDayEvents.map((evt) => (
@@ -924,13 +980,61 @@ export const App: React.FC = () => {
 
             {/* Liste des cours du jour */}
             {currentDayEvents.length === 0 ? (
-              <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
-                <span className="text-4xl">🏖️</span>
-                <h3 className="mt-2 text-sm font-bold text-slate-800 dark:text-slate-200">Aucun cours programmé</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Profitez de votre journée libre ou révisez à la bibliothèque Marie Curie !
-                </p>
-              </div>
+              !apiService.getAdeUrl() && adeEvents.length === 0 ? (
+                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 max-w-xl mx-auto space-y-4">
+                  <span className="text-4xl">📅</span>
+                  <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+                    Synchronisez votre emploi du temps personnel
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Pour afficher vos véritables cours, connectez-vous sur{' '}
+                    <a
+                      href="https://ade-outils.insa-lyon.fr"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#E42313] font-semibold underline"
+                    >
+                      ade-outils.insa-lyon.fr
+                    </a>
+                    , générez votre URL d'export iCal, et collez-la ci-dessous :
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
+                    <input
+                      type="text"
+                      value={adeUrlInput}
+                      onChange={(e) => setAdeUrlInput(e.target.value)}
+                      placeholder="https://ade-outils.insa-lyon.fr/ADE-Cal:~login!2026:..."
+                      className="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <button
+                      onClick={handleSaveAdeUrl}
+                      disabled={!adeUrlInput.trim()}
+                      className="px-4 py-2 rounded-xl bg-[#E42313] hover:bg-red-600 disabled:opacity-50 text-white font-semibold text-xs shadow-md transition-all active:scale-95"
+                    >
+                      Synchroniser
+                    </button>
+                  </div>
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      onClick={async () => {
+                        const sample = await apiService.getAdeEvents();
+                        if (sample) setAdeEvents(sample);
+                      }}
+                      className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline"
+                    >
+                      Afficher un planning d'exemple (Aperçu)
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                  <span className="text-4xl">🏖️</span>
+                  <h3 className="mt-2 text-sm font-bold text-slate-800 dark:text-slate-200">Aucun cours programmé</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Profitez de votre journée libre ou révisez à la bibliothèque Marie Curie !
+                  </p>
+                </div>
+              )
             ) : (
               <div className="space-y-4">
                 {currentDayEvents.map((event) => {
@@ -1022,46 +1126,77 @@ export const App: React.FC = () => {
                 <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-6 shadow-md border border-slate-700">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <div className="text-xs font-mono text-slate-400">N° Étudiant : {academicRecord.studentNumber}</div>
+                      {academicRecord.studentNumber && (
+                        <div className="text-xs font-mono text-slate-400">N° Étudiant : {academicRecord.studentNumber}</div>
+                      )}
                       <h3 className="text-xl font-bold mt-0.5">{academicRecord.name}</h3>
-                      <p className="text-xs text-slate-300 mt-1">{academicRecord.program}</p>
+                      <p className="text-xs text-slate-300 mt-1">{academicRecord.program || 'Élève-Ingénieur INSA Lyon'}</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Moyenne Générale</div>
                         <div className="text-2xl font-extrabold text-emerald-400">
-                          {currentSemesterTranscript?.average ? currentSemesterTranscript.average.toFixed(2) : '--'} / 20
+                          {currentSemesterTranscript?.average !== undefined ? currentSemesterTranscript.average.toFixed(2) : '--'} / 20
                         </div>
                       </div>
                       <div className="text-right border-l border-slate-700 pl-4">
                         <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Crédits ECTS</div>
                         <div className="text-2xl font-extrabold text-blue-400">
-                          {currentSemesterTranscript?.acquiredEcts} / {currentSemesterTranscript?.totalEcts}
+                          {currentSemesterTranscript?.acquiredEcts !== undefined ? `${currentSemesterTranscript.acquiredEcts} / ${currentSemesterTranscript.totalEcts}` : '-- / --'}
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Sélecteur de semestre */}
-                <div className="flex items-center gap-2">
-                  {academicRecord.semesters.map((sem) => (
-                    <button
-                      key={sem.semesterNumber}
-                      onClick={() => setSelectedSemester(sem.semesterNumber)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                        selectedSemester === sem.semesterNumber
-                          ? 'bg-[#E42313] text-white shadow-sm'
-                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
-                      }`}
-                    >
-                      Semestre {sem.semesterNumber} ({sem.academicYear})
-                    </button>
-                  ))}
-                </div>
+                {academicRecord.semesters.length === 0 ? (
+                  <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm max-w-lg mx-auto space-y-3">
+                    <span className="text-3xl">📋</span>
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+                      Aucune note publiée sur MonDossierWeb
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Votre session CAS Keycloak est bien active. Le portail MonDossierWeb n'a pas encore publié de tableau de notes ou de relevé officiel pour ce semestre.
+                    </p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Dès que les jurys ou vos enseignants publieront des notes sur Apogée, elles apparaîtront automatiquement lors de votre prochaine synchronisation. Vous pouvez également importer directement une page HTML enregistrée depuis Apogée.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+                      <button
+                        onClick={() => { setCasModalTab('CAS'); setShowCasModal(true); }}
+                        className="px-4 py-2 rounded-xl bg-[#E42313] hover:bg-red-600 text-white text-xs font-semibold shadow-md transition-all active:scale-95"
+                      >
+                        🔄 Resynchroniser CAS
+                      </button>
+                      <button
+                        onClick={() => { setCasModalTab('HTML'); setShowCasModal(true); }}
+                        className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all"
+                      >
+                        📄 Importer Apogée HTML
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Sélecteur de semestre */}
+                    <div className="flex items-center gap-2">
+                      {academicRecord.semesters.map((sem) => (
+                        <button
+                          key={sem.semesterNumber}
+                          onClick={() => setSelectedSemester(sem.semesterNumber)}
+                          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+                            selectedSemester === sem.semesterNumber
+                              ? 'bg-[#E42313] text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
+                          }`}
+                        >
+                          Semestre {sem.semesterNumber} ({sem.academicYear})
+                        </button>
+                      ))}
+                    </div>
 
-                {/* Liste des Unités d'Enseignement (UE) */}
-                {currentSemesterTranscript && (
+                    {/* Liste des Unités d'Enseignement (UE) */}
+                    {currentSemesterTranscript && (
                   <div className="space-y-4">
                     {currentSemesterTranscript.teachingUnits.map((ue) => (
                       <div
@@ -1112,7 +1247,9 @@ export const App: React.FC = () => {
                   </div>
                 )}
               </>
-            ) : (
+            )}
+          </>
+        ) : (
               <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm max-w-lg mx-auto">
                 <div className="w-12 h-12 rounded-2xl bg-red-100 dark:bg-red-950/60 text-[#E42313] flex items-center justify-center text-xl mx-auto mb-3">
                   🔐
