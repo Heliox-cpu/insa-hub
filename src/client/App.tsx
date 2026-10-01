@@ -56,7 +56,7 @@ export const App: React.FC = () => {
   const [casErrorMsg, setCasErrorMsg] = useState<string>('');
   const [casConnected, setCasConnected] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('insa_hub_cas_authenticated') === 'true';
+      return localStorage.getItem('insa_hub_cas_authenticated') === 'true' && !!localStorage.getItem('insa_hub_mdw_record');
     }
     return false;
   });
@@ -95,13 +95,20 @@ export const App: React.FC = () => {
         apiService.getVaDirectory(),
       ]);
 
-      setAdeEvents(events);
+      if (events && events.length > 0) {
+        setAdeEvents(events);
+      } else {
+        const fallbackEvents = await apiService.getAdeEvents();
+        if (fallbackEvents && fallbackEvents.length > 0) setAdeEvents(fallbackEvents);
+      }
       setFreeSlots(slots);
       setRestaurants(restos);
       if (grades) {
         setAcademicRecord(grades);
-        const isAuth = typeof window !== 'undefined' && localStorage.getItem('insa_hub_cas_authenticated') === 'true';
-        setCasConnected(isAuth);
+        setCasConnected(true);
+      } else {
+        setAcademicRecord(null);
+        setCasConnected(false);
       }
       setVaEvents(eventsVa);
       setVaDirectory(directoryVa);
@@ -209,54 +216,75 @@ export const App: React.FC = () => {
 
   const handleVerifyTotp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!casFlowId) {
-      setCasErrorMsg('Session expirée. Veuillez recommencer.');
-      setCasStep('LOGIN');
-      return;
-    }
     setCasErrorMsg('');
     setIsCasLoading(true);
 
-    if (casFlowId === 'demo-flow-fallback') {
-      try {
-        const record = await apiService.getSampleGrades();
-        if (record) {
-          apiService.saveEncryptedMdwRecord(record);
-          setAcademicRecord(record);
-          setCasConnected(true);
-          if (record.semesters && record.semesters.length > 0) {
-            setSelectedSemester(record.semesters[0].semesterNumber);
-          }
-        }
-        setCasStep('SUCCESS');
-        setTimeout(() => {
-          setShowCasModal(false);
-          setCasStep('LOGIN');
-          setCasTotpCode('');
-          setIsCasLoading(false);
-        }, 1500);
-      } catch {
-        setIsCasLoading(false);
-      }
+    if (!casFlowId) {
+      setCasErrorMsg('Session expirée ou introuvable. Veuillez vous reconnecter.');
+      setIsCasLoading(false);
+      setCasStep('LOGIN');
+      return;
+    }
+
+    const cleanTotp = casTotpCode.trim();
+    if (!/^\d{6}$/.test(cleanTotp)) {
+      setCasErrorMsg('Le code TOTP doit comporter exactement 6 chiffres.');
+      setIsCasLoading(false);
       return;
     }
 
     try {
-      const record = await apiService.verifyCasMfa(casFlowId, casTotpCode);
-      setAcademicRecord(record);
-      setCasConnected(true);
-      if (record.semesters && record.semesters.length > 0) {
-        setSelectedSemester(record.semesters[0].semesterNumber);
+      const record = await apiService.verifyCasMfa(casFlowId, cleanTotp);
+      if (record) {
+        apiService.saveEncryptedMdwRecord(record);
+        setAcademicRecord(record);
+        setCasConnected(true);
+        if (record.semesters && record.semesters.length > 0) {
+          setSelectedSemester(record.semesters[0].semesterNumber);
+        }
       }
+
+      // Recharger immédiatement ADE pour actualiser l'emploi du temps
+      const adeUrl = apiService.getAdeUrl();
+      const [events, slots] = await Promise.all([
+        apiService.getAdeEvents({ url: adeUrl || undefined }),
+        apiService.getFreeSlots(selectedDate, adeUrl || undefined),
+      ]);
+      if (events && events.length > 0) {
+        setAdeEvents(events);
+      }
+      setFreeSlots(slots);
+
       setCasStep('SUCCESS');
       setTimeout(() => {
         setShowCasModal(false);
         setCasStep('LOGIN');
         setCasTotpCode('');
+        setCasPassword('');
         setIsCasLoading(false);
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
-      setCasErrorMsg(err.message || 'Code TOTP invalide. Veuillez réessayer.');
+      console.error('Erreur TOTP:', err);
+      setCasErrorMsg(err.message || 'Code TOTP invalide ou expiré');
+      setIsCasLoading(false);
+    }
+  };
+
+  const handleLoadDemoData = async () => {
+    setIsCasLoading(true);
+    setCasErrorMsg('');
+    try {
+      const demo = await apiService.getSampleGrades();
+      if (demo) {
+        setAcademicRecord(demo);
+        setCasConnected(false); // Mode démo explicite
+        if (demo.semesters && demo.semesters.length > 0) {
+          setSelectedSemester(demo.semesters[0].semesterNumber);
+        }
+        setShowCasModal(false);
+      }
+    } catch {
+      setCasErrorMsg('Impossible de charger les données de démo');
     } finally {
       setIsCasLoading(false);
     }
@@ -436,29 +464,40 @@ export const App: React.FC = () => {
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold mb-2 border border-white/20">
                     <span>📅 Mardi 29 Septembre 2026</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    <span>{academicRecord?.program || 'Portail Étudiant INSA Lyon'}</span>
+                    <span>{casConnected && academicRecord ? academicRecord.program : 'Portail Étudiant INSA'}</span>
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                    Bonjour {academicRecord ? academicRecord.name.split(' ')[0] : 'Étudiant'} 👋
+                    {casConnected && academicRecord
+                      ? `Bonjour ${academicRecord.name.split(' ')[0]} 👋`
+                      : 'Bienvenue sur INSA Hub 👋'}
                   </h1>
                   <p className="text-white/80 text-sm mt-1">
-                    {casConnected && academicRecord ? (
-                      <>Connecté en tant que <strong className="text-white">{academicRecord.name}</strong> • Relevé MonDossierWeb synchronisé.</>
-                    ) : (
-                      <>Vous avez <strong className="text-white">{currentDayEvents.length} cours prévus</strong>, le RI sert votre menu favori ce midi, et 2 événements sont annoncés sur le campus ce soir.</>
-                    )}
+                    {casConnected && academicRecord
+                      ? `Connecté via CAS Keycloak (${academicRecord.name}) • Relevé MonDossierWeb & ADE synchronisés.`
+                      : 'Centralisez vos emplois du temps ADE, notes MonDossierWeb, menus et vie associative.'}
                   </p>
                 </div>
-                <button
-                  onClick={loadAllData}
-                  disabled={isLoading}
-                  className="px-4 py-2.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 font-semibold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50"
-                >
-                  <svg className={`w-4 h-4 text-[#E42313] ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>{isLoading ? 'Actualisation...' : 'Synchroniser tout'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {!casConnected && (
+                    <button
+                      onClick={() => setShowCasModal(true)}
+                      className="px-4 py-2.5 rounded-xl bg-white text-[#E42313] hover:bg-slate-100 font-bold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95"
+                    >
+                      <span>🔐</span>
+                      <span>Se connecter</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={loadAllData}
+                    disabled={isLoading}
+                    className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50 border border-white/20"
+                  >
+                    <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>{isLoading ? 'Actualisation...' : 'Actualiser'}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -475,14 +514,22 @@ export const App: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-amber-500"></span> Prochain cours (ADE)
                   </span>
                   <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
-                    {currentDayEvents[0] ? currentDayEvents[0].start.slice(11, 16) : 'Libre'}
+                    {currentDayEvents[0] ? currentDayEvents[0].start.slice(11, 16) : '--:--'}
                   </span>
                 </div>
                 <div className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-red-500 transition-colors">
-                  {currentDayEvents[0] ? `${currentDayEvents[0].subjectCode} (${currentDayEvents[0].courseType})` : 'Aucun cours programmé'}
+                  {currentDayEvents[0]
+                    ? `${currentDayEvents[0].subjectCode} (${currentDayEvents[0].courseType})`
+                    : currentDayEvents.length === 0 && adeEvents.length > 0
+                    ? 'Aucun cours aujourd’hui'
+                    : 'Planning non configuré'}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                  {currentDayEvents[0]?.location || 'Campus La Doua'}
+                  {currentDayEvents[0]
+                    ? currentDayEvents[0].location
+                    : adeEvents.length > 0
+                    ? 'Journée libre ou révisions'
+                    : 'Cliquez pour configurer votre flux ADE'}
                 </p>
               </div>
 
@@ -496,14 +543,14 @@ export const App: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Menu du Midi (RI)
                   </span>
                   <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
-                    {currentRestaurant?.affluenceDescription?.split('(')[0] || 'Ouvert'}
+                    {currentRestaurant?.affluenceDescription?.split('(')[0] || 'Modérée'}
                   </span>
                 </div>
                 <div className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-red-500 transition-colors">
-                  Curry Pois Chiches / Saumon
+                  {currentRestaurant?.mealServices?.[0]?.categories?.[0]?.dishes?.[0]?.name || 'Menu du Restaurant INSA'}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                  Ligne Végé & Traditionnelle disponibles
+                  {currentRestaurant?.mealServices?.[0]?.categories?.[1]?.dishes?.[0]?.name || 'Ligne Végé & Traditionnelle disponibles'}
                 </p>
               </div>
 
@@ -514,37 +561,45 @@ export const App: React.FC = () => {
               >
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
                   <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500"></span> Moyenne générale (MDW)
+                    <span className="w-2 h-2 rounded-full bg-blue-500"></span> Notes & Scolarité (MDW)
                   </span>
                   <span className="text-slate-400 text-[11px]">
-                    {currentSemesterTranscript?.juryDecision || (currentSemesterTranscript ? `Semestre ${currentSemesterTranscript.semesterNumber}` : (casConnected ? 'Synchronisé' : 'Non connecté'))}
+                    {academicRecord ? (currentSemesterTranscript?.juryDecision || 'En cours') : 'Non connecté'}
                   </span>
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                    {currentSemesterTranscript?.average ? currentSemesterTranscript.average.toFixed(2) : (academicRecord ? 'En attente' : '—')}
-                  </span>
-                  {currentSemesterTranscript?.average ? <span className="text-xs text-slate-400">/ 20</span> : null}
-                  {currentSemesterTranscript ? (
-                    <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-medium">
-                      {currentSemesterTranscript.acquiredEcts} ECTS
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                  {(() => {
-                    const firstModule = currentSemesterTranscript?.teachingUnits
-                      ?.flatMap((u) => u.modules)
-                      ?.find((m) => m.grade !== undefined);
-                    if (firstModule && firstModule.grade !== undefined) {
-                      return `Dernière note : ${firstModule.name} (${firstModule.grade}/20)`;
-                    }
-                    if (academicRecord) {
-                      return `Étudiant : ${academicRecord.name}`;
-                    }
-                    return 'Cliquez pour vous connecter via CAS Keycloak';
-                  })()}
-                </p>
+                {academicRecord && currentSemesterTranscript ? (
+                  <>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                        {currentSemesterTranscript.average !== undefined ? currentSemesterTranscript.average.toFixed(2) : '--'}
+                      </span>
+                      <span className="text-xs text-slate-400">/ 20</span>
+                      <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-medium">
+                        {currentSemesterTranscript.acquiredEcts} / {currentSemesterTranscript.totalEcts} ECTS
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+                      {(() => {
+                        const firstModule = currentSemesterTranscript.teachingUnits
+                          ?.flatMap((u) => u.modules)
+                          ?.find((m) => m.grade !== undefined);
+                        if (firstModule && firstModule.grade !== undefined) {
+                          return `Dernière note : ${firstModule.name} (${firstModule.grade}/20)`;
+                        }
+                        return `${currentSemesterTranscript.teachingUnits.length} UEs enregistrées`;
+                      })()}
+                    </p>
+                  </>
+                ) : (
+                  <div className="py-1">
+                    <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      Synchroniser mes notes
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Connexion CAS Keycloak requise
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Carte 4 : Vie Asso */}
@@ -905,18 +960,28 @@ export const App: React.FC = () => {
                 )}
               </>
             ) : (
-              <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
-                <span className="text-4xl">📊</span>
-                <h3 className="mt-2 text-sm font-bold text-slate-800 dark:text-slate-200">Aucune note synchronisée</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-                  Connectez-vous via CAS Keycloak avec votre code à 6 chiffres TOTP pour charger vos relevés officiels Apogée.
+              <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm max-w-lg mx-auto">
+                <div className="w-12 h-12 rounded-2xl bg-red-100 dark:bg-red-950/60 text-[#E42313] flex items-center justify-center text-xl mx-auto mb-3">
+                  🔐
+                </div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">Relevé de notes MonDossierWeb</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                  Connectez-vous avec vos identifiants CAS INSA Lyon et votre code TOTP pour afficher vos notes, moyennes et crédits ECTS officiels en direct.
                 </p>
-                <button
-                  onClick={() => setShowCasModal(true)}
-                  className="mt-4 px-4 py-2 rounded-xl bg-[#E42313] text-white text-xs font-semibold shadow-md hover:bg-red-600 transition-all"
-                >
-                  Lancer la synchronisation CAS
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 justify-center mt-5">
+                  <button
+                    onClick={() => { setCasModalTab('CAS'); setShowCasModal(true); }}
+                    className="px-5 py-2.5 rounded-xl bg-[#E42313] hover:bg-red-600 text-white text-xs font-semibold shadow-md transition-all active:scale-95"
+                  >
+                    Se connecter avec CAS Keycloak
+                  </button>
+                  <button
+                    onClick={handleLoadDemoData}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all"
+                  >
+                    Mode Démo (Exemple)
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1423,12 +1488,12 @@ export const App: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Identifiant CAS (ex: awilliame)
+                    Identifiant CAS (ex: jdupont)
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Identifiant CAS (ex: awilliame)"
+                    placeholder="Identifiant CAS (ex: jdupont)"
                     value={casUsername}
                     onChange={(e) => setCasUsername(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:ring-2 focus:ring-red-500 outline-none"
@@ -1453,23 +1518,10 @@ export const App: React.FC = () => {
                 </div>
 
                 {casErrorMsg && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/50 p-2.5 rounded-xl border border-red-200 dark:border-red-900/50 flex items-start gap-2">
-                      <span className="text-sm">⚠️</span>
-                      <span className="flex-1">{casErrorMsg}</span>
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCasFlowId('demo-flow-fallback');
-                        setCasErrorMsg('');
-                        setCasStep('TOTP');
-                      }}
-                      className="w-full py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] text-slate-600 dark:text-slate-300 font-medium transition-all text-center"
-                    >
-                      ⚡ Continuer en mode simulation (passer au défi MFA TOTP)
-                    </button>
-                  </div>
+                  <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/50 p-2.5 rounded-xl border border-red-200 dark:border-red-900/50 flex items-start gap-2">
+                    <span className="text-sm">⚠️</span>
+                    <span className="flex-1">{casErrorMsg}</span>
+                  </p>
                 )}
 
                 <div className="flex gap-2 pt-2">
@@ -1513,15 +1565,6 @@ export const App: React.FC = () => {
                     className="w-full text-center tracking-[0.5em] font-mono font-bold text-lg px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-red-500 outline-none"
                   />
                 </div>
-
-                {/* Bouton d'aide pour tester facilement avec un code valide */}
-                <button
-                  type="button"
-                  onClick={() => setCasTotpCode('582913')}
-                  className="w-full text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline text-center"
-                >
-                  ⚡ Remplir avec un code de démonstration valide (582913)
-                </button>
 
                 {casErrorMsg && (
                   <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/50 p-2 rounded-lg">{casErrorMsg}</p>

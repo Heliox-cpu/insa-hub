@@ -109,11 +109,11 @@ export const apiService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `Erreur d'initialisation CAS (${res.status})`);
+      throw new Error(data.message || 'Identifiant ou mot de passe incorrect');
     }
-    return res.json();
+    return data;
   },
 
   async verifyCasMfa(flowId: string, totpCode: string): Promise<StudentAcademicRecord> {
@@ -122,12 +122,13 @@ export const apiService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ flowId, totpCode }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `Code TOTP invalide (${res.status})`);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || 'Code TOTP invalide ou expiré');
     }
-    const json = await res.json();
-    // Sauvegarde chiffrée dans le coffre-fort local client
+    if (!json.data) {
+      throw new Error('Aucune donnée de scolarité retournée');
+    }
     this.saveEncryptedMdwRecord(json.data);
     return json.data;
   },
@@ -148,7 +149,7 @@ export const apiService = {
   },
 
   async getGrades(): Promise<StudentAcademicRecord | null> {
-    // 1. Tenter la lecture du cache local d'abord (offline-first)
+    // Uniquement la lecture du cache local de l'utilisateur authentifié
     return this.getEncryptedMdwRecord();
   },
 
@@ -192,7 +193,9 @@ export const apiService = {
 
   // Gestion de l'URL d'abonnement ADE
   getAdeUrl(): string {
-    return localStorage.getItem(ADE_CONFIG_KEY) || '';
+    const custom = localStorage.getItem(ADE_CONFIG_KEY);
+    if (custom && custom.trim() !== '') return custom;
+    return '';
   },
 
   saveAdeUrl(url: string): void {

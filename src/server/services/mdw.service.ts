@@ -15,7 +15,7 @@ export function getSampleAcademicRecord(studentNumber = '00054321', name = 'Alex
   const s7: SemesterTranscript = {
     semesterNumber: 7,
     academicYear: '2026-2027',
-    average: 14.88,
+    average: 15.12,
     totalEcts: 30,
     acquiredEcts: 30,
     juryDecision: 'Semestre Validé (ADMIS)',
@@ -368,27 +368,24 @@ export function parseApogeeHtml(html: string): StudentAcademicRecord {
 }
 
 export function formatStudentDisplayName(rawName: string, username?: string): string {
-  if (username && username.toLowerCase() === 'awilliame') {
-    return 'Alexis Williame';
-  }
-  if (!rawName || rawName === 'Étudiant INSA') {
-    if (username) {
-      if (username.toLowerCase() === 'awilliame') return 'Alexis Williame';
-      if (username.includes('.')) {
-        return username.split('.').map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+  if (rawName && rawName !== 'Étudiant INSA') {
+    const clean = rawName.replace(/<[^>]+>/g, '').trim();
+    if (clean) {
+      const parts = clean.split(/\s+/);
+      // Example: "MARTIN Alexandre" -> "Alexandre Martin"
+      if (parts.length === 2 && parts[0] === parts[0].toUpperCase() && parts[1] !== parts[1].toUpperCase()) {
+        return `${parts[1]} ${parts[0].charAt(0)}${parts[0].slice(1).toLowerCase()}`;
       }
-      return username.charAt(0).toUpperCase() + username.slice(1);
+      return clean;
     }
-    return 'Étudiant INSA';
   }
-
-  const clean = rawName.replace(/<[^>]+>/g, '').trim();
-  const parts = clean.split(/\s+/);
-  // Example: "WILLIAME Alexis" -> "Alexis Williame"
-  if (parts.length === 2 && parts[0] === parts[0].toUpperCase() && parts[1] !== parts[1].toUpperCase()) {
-    return `${parts[1]} ${parts[0].charAt(0)}${parts[0].slice(1).toLowerCase()}`;
+  if (username) {
+    if (username.includes('.')) {
+      return username.split('.').map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+    }
+    return username.charAt(0).toUpperCase() + username.slice(1);
   }
-  return clean;
+  return 'Étudiant INSA';
 }
 
 // Gestion des sessions éphémères CAS + TOTP
@@ -693,7 +690,7 @@ export function verifyCasMfaChallenge(
   consumedFlowIds.add(flowId);
 
   // Nom formaté et personnalisé
-  const displayName = formatStudentDisplayName('Étudiant INSA', username);
+  const displayName = formatStudentDisplayName('Alexandre Martin', username);
   const record = getSampleAcademicRecord('00054321', displayName);
 
   return {
@@ -801,10 +798,10 @@ export async function verifyCasMfaChallengeAsync(
       const isError = otpHtml.includes('kc-feedback-text') || otpHtml.includes('invalide') || otpHtml.includes('incorrect');
       const redirectLocation = otpRes.headers.get('location');
 
-      if (isError && !redirectLocation) {
+      if (isError || !redirectLocation) {
         return {
           success: false,
-          error: 'Code TOTP invalide ou expiré. Veuillez vérifier votre application d’authentification.',
+          error: 'Code TOTP invalide ou expiré. Veuillez vérifier le code sur votre application d’authentification.',
         };
       }
 
@@ -898,11 +895,15 @@ export async function verifyCasMfaChallengeAsync(
         };
       }
     } catch (err: any) {
-      console.warn('[CAS_LIVE_VERIFY] Live validation error, fallback:', err.message);
+      console.warn('[CAS_LIVE_VERIFY] Live validation error:', err.message);
+      return {
+        success: false,
+        error: err.message || 'Erreur lors de la validation du code TOTP sur Keycloak',
+      };
     }
   }
 
-  // Fallback synchrone classique
+  // Fallback synchrone classique uniquement pour les sessions de test sans Keycloak en direct
   return verifyCasMfaChallenge(flowId, totpCode);
 }
 
