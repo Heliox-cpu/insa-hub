@@ -248,10 +248,186 @@ export function detectFreeSlots(
 }
 
 
+function getMondayOfDate(refDate: Date = new Date()): Date {
+  const parisParts = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(refDate);
+  const map: Record<string, string> = {};
+  for (const p of parisParts) map[p.type] = p.value;
+  const baseDate = new Date(Date.UTC(Number(map.year), Number(map.month) - 1, Number(map.day), 12, 0, 0));
+  const dayOfWeek = baseDate.getUTCDay();
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(baseDate);
+  monday.setUTCDate(baseDate.getUTCDate() + diffToMonday);
+  return monday;
+}
+
+function generateDynamicWeekEvents(mondayDate: Date): string {
+  const getDayCompact = (offsetDays: number) => {
+    const d = new Date(mondayDate);
+    d.setUTCDate(mondayDate.getUTCDate() + offsetDays);
+    const yr = d.getUTCFullYear();
+    const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const da = String(d.getUTCDate()).padStart(2, '0');
+    return `${yr}${mo}${da}`;
+  };
+
+  const mon = getDayCompact(0);
+  const tue = getDayCompact(1);
+  const wed = getDayCompact(2);
+  const thu = getDayCompact(3);
+  const fri = getDayCompact(4);
+
+  return `BEGIN:VEVENT
+UID:ade-dyn-${mon}-01@insa-lyon.fr
+DTSTAMP:${mon}T100000Z
+DTSTART:${mon}T060000Z
+DTEND:${mon}T080000Z
+SUMMARY:IF:4:S1::SYS-DIST:CM::4IF1 #001
+LOCATION:503.001 - Amphithéâtre Gaston Berger
+DESCRIPTION:Systèmes Distribués et Microservices (Mme. Viala)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${mon}-02@insa-lyon.fr
+DTSTAMP:${mon}T100000Z
+DTSTART:${mon}T081500Z
+DTEND:${mon}T101500Z
+SUMMARY:IF:4:S1::BDR:TD::4IF2 #002
+LOCATION:Bâtiment Blaise Pascal - Salle 104
+DESCRIPTION:Bases de Données Relationnelles Avancées (Pr. Scuturici)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${mon}-03@insa-lyon.fr
+DTSTAMP:${mon}T100000Z
+DTSTART:${mon}T120000Z
+DTEND:${mon}T150000Z
+SUMMARY:IF:4:S1::WEB:TP::4IF2 #001
+LOCATION:Bâtiment Blaise Pascal - Lab 206
+DESCRIPTION:Développement Web Moderne & PWA (M. Brunie)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${tue}-01@insa-lyon.fr
+DTSTAMP:${tue}T100000Z
+DTSTART:${tue}T060000Z
+DTEND:${tue}T080000Z
+SUMMARY:IF:4:S1::COMP:CM::4IF1 #003
+LOCATION:503.001 - Amphithéâtre Émilie du Châtelet
+DESCRIPTION:Compilation et Théorie des Langages (Pr. Durand)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${tue}-02@insa-lyon.fr
+DTSTAMP:${tue}T100000Z
+DTSTART:${tue}T081500Z
+DTEND:${tue}T101500Z
+SUMMARY:IF:4:S1::RES:TD::4IF2 #005
+LOCATION:Claude Chappe - Salle 212
+DESCRIPTION:Réseaux IP et Routage Avancé (M. Belkacem)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${tue}-03@insa-lyon.fr
+DTSTAMP:${tue}T100000Z
+DTSTART:${tue}T120000Z
+DTEND:${tue}T150000Z
+SUMMARY:IF:4:S1::SYS-DIST:TP::4IF2 #002
+LOCATION:Bâtiment Lespinasse - Lab 304
+DESCRIPTION:Systèmes Distribués et Microservices (Mme. Viala)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${wed}-01@insa-lyon.fr
+DTSTAMP:${wed}T100000Z
+DTSTART:${wed}T060000Z
+DTEND:${wed}T080000Z
+SUMMARY:IF:4:S1::BDR:CM::4IF1 #007
+LOCATION:503.001 - Amphithéâtre Gaston Berger
+DESCRIPTION:Bases de Données et Big Data (Pr. Scuturici)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${wed}-02@insa-lyon.fr
+DTSTAMP:${wed}T100000Z
+DTSTART:${wed}T081500Z
+DTEND:${wed}T101500Z
+SUMMARY:IF:4:S1::WEB:TD::4IF2 #003
+LOCATION:Bâtiment Lespinasse - Salle 202
+DESCRIPTION:Architectures Web & PWA (M. Brunie)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${wed}-03@insa-lyon.fr
+DTSTAMP:${wed}T100000Z
+DTSTART:${wed}T120000Z
+DTEND:${wed}T140000Z
+SUMMARY:IF:4:S1::PRJ:TD::4IF2 #004
+LOCATION:Bâtiment Blaise Pascal - Salle 110
+DESCRIPTION:Conduite de Projet Agile & DevOps (M. Brunie)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${thu}-01@insa-lyon.fr
+DTSTAMP:${thu}T100000Z
+DTSTART:${thu}T060000Z
+DTEND:${thu}T080000Z
+SUMMARY:IF:4:S1::ANG:TD::G4 #004
+LOCATION:Bâtiment Louis Neel - Salle 105
+DESCRIPTION:Anglais Technique C1 (Mme. Smith)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${thu}-02@insa-lyon.fr
+DTSTAMP:${thu}T100000Z
+DTSTART:${thu}T081500Z
+DTEND:${thu}T101500Z
+SUMMARY:IF:4:S1::SEC:CM::4IF1 #002
+LOCATION:Amphi Gaston Berger
+DESCRIPTION:Cryptographie & Sécurité Applicative (M. Belkacem)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${thu}-03@insa-lyon.fr
+DTSTAMP:${thu}T100000Z
+DTSTART:${thu}T120000Z
+DTEND:${thu}T140000Z
+SUMMARY:IF:4:S1::MATH:CM::4IF1 #008
+LOCATION:Amphi Gaston Berger
+DESCRIPTION:Probabilités et Statistiques Appliquées (Pr. Pothier)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${fri}-01@insa-lyon.fr
+DTSTAMP:${fri}T100000Z
+DTSTART:${fri}T060000Z
+DTEND:${fri}T090000Z
+SUMMARY:IF:4:S1::COMP:TP::4IF2 #004
+LOCATION:Bâtiment Lespinasse - Lab 302
+DESCRIPTION:Projet Compilateur C-- (Pr. Durand)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${fri}-02@insa-lyon.fr
+DTSTAMP:${fri}T100000Z
+DTSTART:${fri}T091500Z
+DTEND:${fri}T101500Z
+SUMMARY:IF:4:S1::ECO:CM::4IF1 #003
+LOCATION:Amphi Émilie du Châtelet
+DESCRIPTION:Économie, RSE & Droit des Affaires (M. Garnier)
+END:VEVENT
+BEGIN:VEVENT
+UID:ade-dyn-${fri}-03@insa-lyon.fr
+DTSTAMP:${fri}T100000Z
+DTSTART:${fri}T120000Z
+DTEND:${fri}T140000Z
+SUMMARY:IF:4:S1::RES:EV::4IF #001
+LOCATION:Amphi Émilie du Châtelet
+DESCRIPTION:Évaluation semestrielle Réseaux (DS)
+END:VEVENT
+`;
+}
+
 /**
  * Fixture de secours (cours représentatifs INSA Lyon) utilisée en mode démo / test ou en cas d'indisponibilité réseau
  */
-export function getSampleAdeIcs(): string {
+export function getSampleAdeIcs(referenceDate: Date = new Date()): string {
+  const currentMonday = getMondayOfDate(referenceDate);
+  const currentMondayStr = currentMonday.toISOString().slice(0, 10);
+  const isBenchmarkWeek = currentMondayStr === '2026-09-28';
+  const dynamicWeekEvents = !isBenchmarkWeek ? generateDynamicWeekEvents(currentMonday) : '';
+
   return `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//ADE Campus//INSA Lyon//FR
@@ -392,7 +568,7 @@ SUMMARY:IF:4:S1::RES:EV::4IF #001
 LOCATION:Amphi Émilie du Châtelet
 DESCRIPTION:Évaluation semestrielle Réseaux (DS)
 END:VEVENT
-END:VCALENDAR`;
+${dynamicWeekEvents}END:VCALENDAR`;
 }
 
 /**

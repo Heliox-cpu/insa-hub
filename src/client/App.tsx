@@ -41,9 +41,9 @@ export function getCurrentWeekDays(referenceDate: Date = new Date()): WeekDayIte
   monday.setUTCDate(baseDate.getUTCDate() + diffToMonday);
 
   const days: WeekDayItem[] = [];
-  const dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'];
+  const dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 7; i++) {
     const d = new Date(monday);
     d.setUTCDate(monday.getUTCDate() + i);
     const dStr = d.toISOString().slice(0, 10);
@@ -728,12 +728,12 @@ export const App: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-red-500 transition-colors">
-                  {nextVaEvent ? nextVaEvent.title : 'Aucun événement prévu'}
+                  {nextVaEvent ? nextVaEvent.title : 'Aucun événement associatif prévu aujourd’hui'}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
                   {nextVaEvent
                     ? `${nextVaEvent.association} • ${nextVaEvent.isFree ? 'Entrée libre' : nextVaEvent.price}`
-                    : 'Consultez les événements et clubs du campus'}
+                    : 'Consultez les événements et associations du campus'}
                 </p>
               </div>
 

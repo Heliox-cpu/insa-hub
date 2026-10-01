@@ -466,6 +466,9 @@ export function parseCrousMenuData(crousData: any): MealMenu[] {
     const isoDate = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
 
     for (const meal of dayEntry.repas) {
+      if (meal.type !== 'midi' && meal.type !== 'soir') {
+        continue;
+      }
       const mealType: 'lunch' | 'dinner' = meal.type === 'soir' ? 'dinner' : 'lunch';
       const lines: { name: string; items: MenuItem[] }[] = [];
       const allItems: MenuItem[] = [];
@@ -725,11 +728,63 @@ export async function fetchCampusRestaurants(forceRefresh = false): Promise<{
       const riTarget = sampleRestaurants.find((r) => r.id === 'ri');
       const olivierTarget = sampleRestaurants.find((r) => r.id === 'olivier');
 
-      if (riTarget && riMenus.length > 0) {
-        riTarget.menus = riMenus;
+      const hasRiToday = riMenus.some((m) => m.date === todayStr && m.items.length > 0);
+      const hasOlivierToday = olivierMenus.some((m) => m.date === todayStr && m.items.length > 0);
+
+      const refDate = new Date(`${todayStr}T12:00:00Z`);
+      const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', weekday: 'short' }).format(refDate);
+      const isSunday = weekday === 'Sun';
+      const isSaturday = weekday === 'Sat';
+      const isWeekend = isSunday || isSaturday;
+      const isHoliday = isFrenchBankHoliday(refDate);
+
+      const riLunchOpen = !isSunday && !isHoliday;
+      const riLunchClosureReason = isSunday ? 'Fermé le dimanche midi' : (isHoliday ? 'Fermé (Jour férié)' : undefined);
+      const riDinnerOpen = !isSaturday && !isHoliday;
+      const riDinnerClosureReason = isSaturday ? 'Fermé le samedi soir' : (isHoliday ? 'Fermé (Jour férié)' : undefined);
+      const weekendClosureReason = isWeekend ? 'Fermé le week-end' : (isHoliday ? 'Fermé (Jour férié)' : undefined);
+      const crousOpen = !isWeekend && !isHoliday;
+
+      if (riTarget) {
+        if (hasRiToday) {
+          riTarget.menus = riMenus;
+        } else {
+          riTarget.menus = [
+            {
+              date: todayStr,
+              mealType: 'lunch',
+              isOpen: riLunchOpen,
+              closureReason: riLunchClosureReason || 'Menu non publié par le BDE INSA',
+              items: [],
+              lines: [],
+            },
+            {
+              date: todayStr,
+              mealType: 'dinner',
+              isOpen: riDinnerOpen,
+              closureReason: riDinnerClosureReason || 'Menu non publié par le BDE INSA',
+              items: [],
+              lines: [],
+            },
+          ];
+        }
       }
-      if (olivierTarget && olivierMenus.length > 0) {
-        olivierTarget.menus = olivierMenus;
+
+      if (olivierTarget) {
+        if (hasOlivierToday) {
+          olivierTarget.menus = olivierMenus;
+        } else {
+          olivierTarget.menus = [
+            {
+              date: todayStr,
+              mealType: 'lunch',
+              isOpen: crousOpen,
+              closureReason: weekendClosureReason || 'Menu non publié par le BDE INSA',
+              items: [],
+              lines: [],
+            },
+          ];
+        }
       }
     }
 

@@ -689,8 +689,8 @@ export function verifyCasMfaChallenge(
   activeSessions.delete(flowId);
   consumedFlowIds.add(flowId);
 
-  // Nom formaté et personnalisé
-  const displayName = formatStudentDisplayName('Alexandre Martin', username);
+  // Nom formaté et personnalisé selon l'identifiant CAS de l'étudiant
+  const displayName = formatStudentDisplayName(username ? '' : 'Alexandre Martin', username);
   const record = getSampleAcademicRecord('00054321', displayName);
 
   return {
