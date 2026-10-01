@@ -102,6 +102,7 @@ mdwRouter.post('/auth/verify', async (req: Request, res: Response, next: NextFun
       step: 'COMPLETED',
       message: 'Authentification CAS + défi MFA TOTP validés avec succès',
       data: verification.record,
+      adeUrl: verification.adeUrl,
     });
   } catch (error) {
     next(error);

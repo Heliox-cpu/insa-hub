@@ -365,7 +365,7 @@ export const App: React.FC = () => {
     }
 
     try {
-      const record = await apiService.verifyCasMfa(casFlowId, cleanTotp);
+      const { record, adeUrl } = await apiService.verifyCasMfa(casFlowId, cleanTotp);
       if (record) {
         apiService.saveEncryptedMdwRecord(record);
         setAcademicRecord(record);
@@ -375,12 +375,13 @@ export const App: React.FC = () => {
         }
       }
 
-      // Recharger immédiatement ADE pour actualiser l'emploi du temps si configuré
-      const adeUrl = apiService.getAdeUrl();
-      if (adeUrl) {
+      // Recharger immédiatement ADE pour actualiser l'emploi du temps si configuré ou auto-découvert
+      const effectiveAdeUrl = adeUrl || apiService.getAdeUrl();
+      if (effectiveAdeUrl) {
+        setAdeUrlInput(effectiveAdeUrl);
         const [events, slots] = await Promise.all([
-          apiService.getAdeEvents({ url: adeUrl }),
-          apiService.getFreeSlots(selectedDate, adeUrl),
+          apiService.getAdeEvents({ url: effectiveAdeUrl }),
+          apiService.getFreeSlots(selectedDate, effectiveAdeUrl),
         ]);
         if (events && events.length > 0) {
           setAdeEvents(events);

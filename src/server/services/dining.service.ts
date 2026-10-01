@@ -635,6 +635,74 @@ function parseBdeMealObject(mealObj: Record<string, any>): { lines: { name: stri
 }
 
 /**
+ * Parse les données de l'API live insa-menu-scraper (Le Restaurant INSA - RI)
+ */
+export function parseInsaMenuScraperData(data: any): MealMenu[] {
+  const menus: MealMenu[] = [];
+  if (!data || !Array.isArray(data.days)) return menus;
+
+  const categoryMap: Record<string, { label: string; cat: MenuItem['category'] }> = {
+    ENTREE: { label: 'Entrées', cat: 'starter' },
+    PLAT: { label: 'Plats Chauds', cat: 'dish' },
+    GARNITURE: { label: 'Accompagnements', cat: 'side' },
+    SAUCE: { label: 'Sauces', cat: 'side' },
+    FROMAGE: { label: 'Fromages', cat: 'dessert' },
+    DESSERT: { label: 'Desserts', cat: 'dessert' },
+  };
+
+  for (const day of data.days) {
+    if (!day || !day.date || !Array.isArray(day.meals)) continue;
+    const dateStr = day.date;
+
+    for (const meal of day.meals) {
+      if (!meal || meal.is_empty || !Array.isArray(meal.dishes) || meal.dishes.length === 0) continue;
+      const mealType: 'lunch' | 'dinner' = meal.meal_type === 'dinner' ? 'dinner' : 'lunch';
+
+      const linesMap = new Map<string, MenuItem[]>();
+      const allItems: MenuItem[] = [];
+
+      for (const d of meal.dishes) {
+        if (!d || !d.name) continue;
+        const rawCategory = String(d.category || 'PLAT').toUpperCase();
+        const config = categoryMap[rawCategory] || { label: 'Plats Chauds', cat: 'dish' as const };
+
+        const { cleanName, labels } = extractDietaryLabels(d.name);
+        if (d.is_vegetarian && !labels.includes('VEG')) labels.push('VEG');
+        if (d.is_bio && !labels.includes('BIO')) labels.push('BIO');
+        if (d.is_french_meat && !labels.includes('VF')) labels.push('VF');
+
+        const item: MenuItem = {
+          name: cleanName,
+          category: config.cat,
+          labels,
+          allergens: Array.isArray(d.allergens) && d.allergens.length > 0 ? d.allergens : undefined,
+          line: config.label,
+        };
+
+        if (!linesMap.has(config.label)) {
+          linesMap.set(config.label, []);
+        }
+        linesMap.get(config.label)!.push(item);
+        allItems.push(item);
+      }
+
+      if (allItems.length > 0) {
+        const lines = Array.from(linesMap.entries()).map(([name, items]) => ({ name, items }));
+        menus.push({
+          date: dateStr,
+          mealType,
+          isOpen: true,
+          lines,
+          items: allItems,
+        });
+      }
+    }
+  }
+
+  return menus;
+}
+
+/**
  * Récupère les restaurants et leurs menus à jour en interrogeant directement
  * l'API CROUStillant (Puvis, Archimède, Astrée) et l'API BDE INSA (RI, Olivier)
  */
@@ -703,9 +771,24 @@ export async function fetchCampusRestaurants(forceRefresh = false): Promise<{
       return { ok: false, data: null };
     })();
 
-    const [crousResults, bdeResult] = await Promise.all([
+    const scraperPromise = (async () => {
+      try {
+        const res = await fetch('https://insa-menu-scraper.vercel.app/api/week', {
+          signal: AbortSignal.timeout(5000),
+          headers: { 'User-Agent': 'INSA-Hub-Webapp/1.0.0 (+https://insa-hub.vercel.app)' },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          return { ok: true, data: json };
+        }
+      } catch {}
+      return { ok: false, data: null };
+    })();
+
+    const [crousResults, bdeResult, scraperResult] = await Promise.all([
       Promise.all(crousPromises),
       bdePromise,
+      scraperPromise,
     ]);
 
     let remoteCount = 0;
@@ -721,7 +804,21 @@ export async function fetchCampusRestaurants(forceRefresh = false): Promise<{
       }
     }
 
-    // Mise à jour des restaurants INSA avec les données du BDE si disponibles
+    // Priorité 1 pour le Restaurant INSA (RI) : API insa-menu-scraper
+    let hasScraperRi = false;
+    if (scraperResult.ok && scraperResult.data) {
+      const scraperMenus = parseInsaMenuScraperData(scraperResult.data);
+      if (scraperMenus.length > 0) {
+        remoteCount++;
+        hasScraperRi = true;
+        const riTarget = sampleRestaurants.find((r) => r.id === 'ri');
+        if (riTarget) {
+          riTarget.menus = scraperMenus;
+        }
+      }
+    }
+
+    // Mise à jour des restaurants INSA avec les données du BDE (L'Olivier, et RI en secours)
     if (bdeResult.ok && bdeResult.data) {
       remoteCount++;
       const { riMenus, olivierMenus } = parseBdeMenuData(bdeResult.data);
@@ -745,7 +842,7 @@ export async function fetchCampusRestaurants(forceRefresh = false): Promise<{
       const weekendClosureReason = isWeekend ? 'Fermé le week-end' : (isHoliday ? 'Fermé (Jour férié)' : undefined);
       const crousOpen = !isWeekend && !isHoliday;
 
-      if (riTarget) {
+      if (riTarget && !hasScraperRi) {
         if (hasRiToday) {
           riTarget.menus = riMenus;
         } else {

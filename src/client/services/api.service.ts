@@ -116,7 +116,7 @@ export const apiService = {
     return data;
   },
 
-  async verifyCasMfa(flowId: string, totpCode: string): Promise<StudentAcademicRecord> {
+  async verifyCasMfa(flowId: string, totpCode: string): Promise<{ record: StudentAcademicRecord; adeUrl?: string }> {
     const res = await fetch(`${API_BASE}/mdw/auth/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -130,7 +130,10 @@ export const apiService = {
       throw new Error('Aucune donnée de scolarité retournée');
     }
     this.saveEncryptedMdwRecord(json.data);
-    return json.data;
+    if (json.adeUrl) {
+      this.saveAdeUrl(json.adeUrl);
+    }
+    return { record: json.data, adeUrl: json.adeUrl };
   },
 
   async parseApogeeHtml(html: string): Promise<StudentAcademicRecord> {

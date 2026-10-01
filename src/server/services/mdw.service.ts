@@ -640,12 +640,149 @@ export async function initCasSessionAsync(username: string, password?: string): 
 }
 
 /**
+ * Extrait l'URL d'abonnement iCal ADE depuis le code HTML de la page des outils ADE
+ */
+export function extractAdeUrlFromHtml(html: string, username?: string): string | undefined {
+  if (!html) return undefined;
+
+  // 1. URL directe ADE-Cal officielle (ex: https://ade-outils.insa-lyon.fr/ADE-Cal:~awilliame!2026:...)
+  const adeCalMatch = html.match(/https?:\/\/ade-outils\.insa-lyon\.fr\/ADE-Cal:[^"'\s<>&]+/i);
+  if (adeCalMatch) return adeCalMatch[0];
+
+  // 2. URL avec tilde d'identifiant étudiant
+  const adeTildeMatch = html.match(/https?:\/\/[^"'\s<>&]+\/ADE-Cal:~[^"'\s<>&]+/i);
+  if (adeTildeMatch) return adeTildeMatch[0];
+
+  // 3. Lien webcal:// ou https:// explicite pointant vers un fichier ou flux .ics
+  const icsMatch = html.match(/(?:https?|webcal):\/\/[^"'\s<>&]*(?:ade|cal)[^"'\s<>&]*\.ics(?:\?[^"'\s<>&]*)?/i);
+  if (icsMatch) {
+    return icsMatch[0].replace(/^webcal:/i, 'https:');
+  }
+
+  // 4. Flux hébergé sur les domaines officiels INSA (.ics ou webcal)
+  const insaIcsMatch = html.match(/(?:https?|webcal):\/\/[^"'\s<>&]*insa-lyon\.fr[^"'\s<>&]*\.(?:ics|cal)(?:\?[^"'\s<>&]*)?/i);
+  if (insaIcsMatch) {
+    return insaIcsMatch[0].replace(/^webcal:/i, 'https:');
+  }
+
+  // 5. Attribut HTML value ou href contenant ADE-Cal
+  const attrMatch = html.match(/(?:value|href)=["']([^"']*(?:ADE-Cal|ade-outils)[^"']*)["']/i);
+  if (attrMatch) {
+    let candidate = attrMatch[1];
+    if (candidate.startsWith('/')) candidate = 'https://ade-outils.insa-lyon.fr' + candidate;
+    if (candidate.startsWith('webcal://')) candidate = candidate.replace(/^webcal:/i, 'https:');
+    if (candidate.startsWith('http')) return candidate;
+  }
+
+  // 6. Token textuel brut de type ADE-Cal:~login!annee:token
+  if (username) {
+    const userPattern = new RegExp(`(?:ADE-Cal:)?~?${username}![0-9]+:[a-zA-Z0-9_-]+`, 'i');
+    const tokenMatch = html.match(userPattern);
+    if (tokenMatch) {
+      const token = tokenMatch[0];
+      return token.startsWith('http')
+        ? token
+        : `https://ade-outils.insa-lyon.fr/${token.startsWith('ADE-Cal:') ? token : 'ADE-Cal:' + token}`;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Tente de découvrir automatiquement le flux iCal ADE de l'étudiant via sa session CAS Keycloak active
+ */
+export async function discoverAdeCalendarUrl(
+  cookieJar: Map<string, string>,
+  username?: string
+): Promise<string | undefined> {
+  const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
+  const currentAcademic = `${currentYear}-${nextYear}`;
+  const prevAcademic = `${currentYear - 1}-${currentYear}`;
+
+  const targetServices = [
+    `https://ade-outils.insa-lyon.fr/ADE-iCal@${currentAcademic}`,
+    'https://ade-outils.insa-lyon.fr/ADE-iCal',
+    `https://ade-outils.insa-lyon.fr/ADE-iCal@${prevAcademic}`,
+    'https://ade-outils.insa-lyon.fr/',
+  ];
+
+  for (const serviceUrl of targetServices) {
+    try {
+      // 1. Obtenir un ticket CAS Keycloak avec la session SSO active
+      const casLoginUrl = `https://idauth.insa-lyon.fr/realms/insa-lyon/protocol/cas/login?service=${encodeURIComponent(serviceUrl)}`;
+      const casRes = await fetch(casLoginUrl, {
+        method: 'GET',
+        headers: {
+          'Cookie': getCookieHeader(cookieJar),
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(5000),
+      });
+
+      updateCookieJar(cookieJar, casRes);
+
+      let targetUrl = casRes.headers.get('location');
+      if (!targetUrl && casRes.status === 200) {
+        const html = await casRes.text();
+        const url = extractAdeUrlFromHtml(html, username);
+        if (url) return url;
+      }
+
+      if (targetUrl) {
+        targetUrl = toAbsoluteUrl(targetUrl, 'https://ade-outils.insa-lyon.fr');
+        const adeJar = new Map<string, string>();
+        for (const [k, v] of cookieJar.entries()) {
+          adeJar.set(k, v);
+        }
+
+        let currentHop = targetUrl;
+        let finalHtml = '';
+
+        for (let hop = 0; hop < 4; hop++) {
+          const hopRes = await fetch(currentHop, {
+            headers: {
+              'Cookie': getCookieHeader(adeJar),
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+            redirect: 'manual',
+            signal: AbortSignal.timeout(5000),
+          });
+
+          updateCookieJar(adeJar, hopRes);
+
+          const loc = hopRes.headers.get('location');
+          if (loc && (hopRes.status === 301 || hopRes.status === 302 || hopRes.status === 303 || hopRes.status === 307)) {
+            currentHop = toAbsoluteUrl(loc, currentHop);
+            continue;
+          }
+
+          finalHtml = await hopRes.text();
+          break;
+        }
+
+        const foundUrl = extractAdeUrlFromHtml(finalHtml, username);
+        if (foundUrl) return foundUrl;
+      }
+    } catch (err: any) {
+      console.warn(`[ADE_DISCOVERY] Échec de la sonde pour ${serviceUrl}:`, err.message);
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Valide le code MFA TOTP et retourne le dossier académique de l'étudiant (mode synchrone / mock)
  */
 export function verifyCasMfaChallenge(
   flowId: string,
   totpCode: string
-): { success: boolean; error?: string; record?: StudentAcademicRecord } {
+): { success: boolean; error?: string; record?: StudentAcademicRecord; adeUrl?: string } {
   purgeExpiredSessions();
 
   if (consumedFlowIds.has(flowId)) {
@@ -725,7 +862,7 @@ export function verifyCasMfaChallenge(
 export async function verifyCasMfaChallengeAsync(
   flowId: string,
   totpCode: string
-): Promise<{ success: boolean; error?: string; record?: StudentAcademicRecord }> {
+): Promise<{ success: boolean; error?: string; record?: StudentAcademicRecord; adeUrl?: string }> {
   purgeExpiredSessions();
 
   if (consumedFlowIds.has(flowId)) {
@@ -899,9 +1036,21 @@ export async function verifyCasMfaChallengeAsync(
           parsedRecord.studentNumber = '';
         }
 
+        // Tentative de découverte automatique du lien iCal ADE
+        let adeUrl: string | undefined;
+        try {
+          adeUrl = await discoverAdeCalendarUrl(cookieJar, username);
+          if (adeUrl) {
+            console.info(`[ADE_DISCOVERY] URL iCal découverte pour ${username}: ${adeUrl}`);
+          }
+        } catch (e: any) {
+          console.warn('[ADE_DISCOVERY] Découverte automatique iCal impossible:', e.message);
+        }
+
         return {
           success: true,
           record: parsedRecord,
+          adeUrl,
         };
       }
     } catch (err: any) {
