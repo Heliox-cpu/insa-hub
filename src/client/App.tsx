@@ -547,10 +547,10 @@ export const App: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-red-500 transition-colors">
-                  {currentRestaurant?.mealServices?.[0]?.categories?.[0]?.dishes?.[0]?.name || 'Menu du Restaurant INSA'}
+                  {currentMealMenu?.items?.[0]?.name || 'Menu du Restaurant INSA'}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                  {currentRestaurant?.mealServices?.[0]?.categories?.[1]?.dishes?.[0]?.name || 'Ligne Végé & Traditionnelle disponibles'}
+                  {currentMealMenu?.items?.[1]?.name || 'Ligne Végé & Traditionnelle disponibles'}
                 </p>
               </div>
 
