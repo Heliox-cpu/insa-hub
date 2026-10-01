@@ -12,7 +12,7 @@ import type {
  * et des points Izly CROUS (ex: "(3 pts)" ou "(2 pts")
  */
 const LABEL_REGEX = /<(BIO|VF|FLF|FM|VEG|BBC|HVE)>/gi;
-const POINTS_REGEX = /\s*\(([0-9]+)\s*pts?\)?/i;
+const POINTS_REGEX = /\s*\(([0-9]+)\s*(?:pts?|points?)\)?/i;
 
 export function extractDietaryLabels(rawName: string): { cleanName: string; labels: DietaryLabel[]; points?: number } {
   if (!rawName) return { cleanName: '', labels: [] };
@@ -30,20 +30,29 @@ export function extractDietaryLabels(rawName: string): { cleanName: string; labe
   // Nettoyage des balises du nom affiché
   let cleanName = rawName.replace(LABEL_REGEX, '').replace(/\s+/g, ' ').trim();
 
-  // Extraction et nettoyage des points CROUS Izly éventuels
+  // Extraction et nettoyage des points CROUS Izly éventuels (ex: "(3 pts)", "(2 points)", "(2 pts")
   let points: number | undefined;
   const pointsMatch = cleanName.match(POINTS_REGEX);
   if (pointsMatch) {
-    points = parseInt(pointsMatch[1], 10);
+    const parsed = parseInt(pointsMatch[1], 10);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 6) {
+      points = parsed;
+    }
     cleanName = cleanName.replace(POINTS_REGEX, '').trim();
   }
 
   // Inférence automatique si pas de label explicite mais mot-clé évident
-  if (!labels.includes('VEG') && /\b(végétarien|végé|veggie|tofu|falafel)\b/i.test(cleanName)) {
+  if (!labels.includes('VEG') && /\b(végétarien|végé|veggie|tofu|falafel|fromage|chèvre|mozzarella)\b/i.test(cleanName)) {
     labels.push('VEG');
   }
   if (!labels.includes('BIO') && /\b(bio|biologique)\b/i.test(cleanName)) {
     labels.push('BIO');
+  }
+  if (!labels.includes('FM') && /\b(poisson|saumon|colin|cabillaud|thon|mer|crevette)\b/i.test(cleanName)) {
+    labels.push('FM');
+  }
+  if (!labels.includes('VF') && /\b(poulet|dinde|volaille|boeuf|porc|jambon|viande)\b/i.test(cleanName)) {
+    labels.push('VF');
   }
 
   return { cleanName, labels, points };
@@ -235,7 +244,7 @@ export function getSampleCampusRestaurants(todayStr: string = getTodayDateStr())
             {
               name: 'Ligne Végétarienne',
               items: [
-                { name: 'Curry de Pois Chiches, Lait de Coco & Coriandre', category: 'dish', labels: ['VEG', 'BIO'] },
+                { name: 'Wok de Légumes Croquants & Tofu Mariné', category: 'dish', labels: ['VEG', 'BIO'] },
                 { name: 'Riz Basmati aux Épices Douces', category: 'side', labels: ['BIO'] },
                 { name: 'Gratin de Courgettes au Chèvre Frais', category: 'dish', labels: ['VEG'] },
               ],
@@ -243,7 +252,7 @@ export function getSampleCampusRestaurants(todayStr: string = getTodayDateStr())
             {
               name: 'Ligne Traditionnelle',
               items: [
-                { name: 'Pavé de Saumon Rôti, Émulsion Aneth & Citron', category: 'dish', labels: ['FM'] },
+                { name: 'Dos de Colin d’Alaska Rôti au Four', category: 'dish', labels: ['FM'] },
                 { name: 'Rôti de Dinde Forestier', category: 'dish', labels: ['VF'] },
                 { name: 'Frites Maison & Poêlée de Légumes Rustiques', category: 'side', labels: ['HVE'] },
               ],
@@ -251,7 +260,7 @@ export function getSampleCampusRestaurants(todayStr: string = getTodayDateStr())
             {
               name: 'Ligne Monde',
               items: [
-                { name: 'Tajine d’Agneau aux Pruneaux & Amandes Effilées', category: 'dish', labels: ['BBC'] },
+                { name: 'Sauté de Boeuf Épicé aux Saveurs d’Orient', category: 'dish', labels: ['BBC'] },
                 { name: 'Semoule Fine aux Saveurs d’Orient', category: 'side', labels: [] },
               ],
             },
@@ -262,9 +271,9 @@ export function getSampleCampusRestaurants(todayStr: string = getTodayDateStr())
             { name: 'Taboulé Libanais à la Menthe Fraîche', category: 'starter', labels: ['BIO', 'VEG'] },
             { name: 'Velouté de Potimarron aux Graines Grillées', category: 'starter', labels: ['VEG'] },
             // Plats
-            { name: 'Curry de Pois Chiches, Lait de Coco & Coriandre', category: 'dish', labels: ['VEG', 'BIO'], line: 'Ligne Végétarienne' },
-            { name: 'Pavé de Saumon Rôti, Émulsion Aneth & Citron', category: 'dish', labels: ['FM'], line: 'Ligne Traditionnelle' },
-            { name: 'Tajine d’Agneau aux Pruneaux & Amandes Effilées', category: 'dish', labels: ['BBC'], line: 'Ligne Monde' },
+            { name: 'Wok de Légumes Croquants & Tofu Mariné', category: 'dish', labels: ['VEG', 'BIO'], line: 'Ligne Végétarienne' },
+            { name: 'Dos de Colin d’Alaska Rôti au Four', category: 'dish', labels: ['FM'], line: 'Ligne Traditionnelle' },
+            { name: 'Sauté de Boeuf Épicé aux Saveurs d’Orient', category: 'dish', labels: ['BBC'], line: 'Ligne Monde' },
             // Desserts
             { name: 'Tarte aux Pommes Caramélisées Maison', category: 'dessert', labels: ['FLF'] },
             { name: 'Mousse au Chocolat Noir 70%', category: 'dessert', labels: ['BIO', 'VEG'] },
@@ -445,6 +454,187 @@ const DINING_CACHE_TTL_MS = 30 * 60 * 1000;
 /**
  * Récupère les restaurants et leurs menus à jour (en interrogeant le BDE INSA et CROUStillant avec fallback)
  */
+export function parseCrousMenuData(crousData: any): MealMenu[] {
+  if (!crousData || !Array.isArray(crousData.data)) return [];
+  const menus: MealMenu[] = [];
+
+  for (const dayEntry of crousData.data) {
+    if (!dayEntry.date || !Array.isArray(dayEntry.repas)) continue;
+    // Format CROUS: "DD-MM-YYYY" -> ISO "YYYY-MM-DD"
+    const [dd, mm, yyyy] = String(dayEntry.date).split('-');
+    if (!dd || !mm || !yyyy) continue;
+    const isoDate = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+
+    for (const meal of dayEntry.repas) {
+      const mealType: 'lunch' | 'dinner' = meal.type === 'soir' ? 'dinner' : 'lunch';
+      const lines: { name: string; items: MenuItem[] }[] = [];
+      const allItems: MenuItem[] = [];
+
+      if (Array.isArray(meal.categories)) {
+        for (const cat of meal.categories) {
+          const catName = cat.libelle || 'Plat';
+          const catLower = catName.toLowerCase();
+          const catItems: MenuItem[] = [];
+
+          if (Array.isArray(cat.plats)) {
+            for (const plat of cat.plats) {
+              const rawName = plat.libelle || '';
+              if (!rawName.trim()) continue;
+              const { cleanName, labels, points } = extractDietaryLabels(rawName);
+
+              let category: MenuItem['category'] = 'dish';
+              if (catLower.includes('entrée')) category = 'starter';
+              else if (catLower.includes('accompagnement')) category = 'side';
+              else if (catLower.includes('dessert') || catLower.includes('douceur')) category = 'dessert';
+              else if (catLower.includes('sandwich') || catLower.includes('snack') || catLower.includes('formule')) category = 'snack';
+              else if (catLower.includes('pizza')) category = 'pizza';
+
+              if (catLower.includes('végétarien') && !labels.includes('VEG')) {
+                labels.push('VEG');
+              }
+              if (catLower.includes('poisson') && !labels.includes('FM')) {
+                labels.push('FM');
+              }
+
+              const item: MenuItem = {
+                name: cleanName,
+                category,
+                labels,
+                points: points !== undefined ? points : (catLower.includes('formule') ? 6 : undefined),
+                line: catName,
+              };
+
+              catItems.push(item);
+              allItems.push(item);
+            }
+          }
+
+          if (catItems.length > 0) {
+            lines.push({
+              name: catName,
+              items: catItems,
+            });
+          }
+        }
+      }
+
+      menus.push({
+        date: isoDate,
+        mealType,
+        isOpen: true,
+        lines: lines.length > 0 ? lines : undefined,
+        items: allItems,
+      });
+    }
+  }
+
+  return menus;
+}
+
+export function parseBdeMenuData(bdeData: any, currentYear: number = new Date().getFullYear()): { riMenus: MealMenu[]; olivierMenus: MealMenu[] } {
+  const riMenus: MealMenu[] = [];
+  const olivierMenus: MealMenu[] = [];
+
+  if (!bdeData || !Array.isArray(bdeData.days)) {
+    return { riMenus, olivierMenus };
+  }
+
+  for (const day of bdeData.days) {
+    if (!day.date || typeof day.date.day !== 'number' || typeof day.date.month !== 'number') continue;
+    const dayStr = String(day.date.day).padStart(2, '0');
+    const monthStr = String(day.date.month).padStart(2, '0');
+    const yearStr = String(day.date.year || currentYear);
+    const dateStr = `${yearStr}-${monthStr}-${dayStr}`;
+
+    // Déjeuner RI
+    if (day.lunch?.ri && typeof day.lunch.ri === 'object') {
+      const { lines, items } = parseBdeMealObject(day.lunch.ri);
+      if (items.length > 0) {
+        riMenus.push({
+          date: dateStr,
+          mealType: 'lunch',
+          isOpen: true,
+          lines: lines.length > 0 ? lines : undefined,
+          items,
+        });
+      }
+    }
+
+    // Déjeuner Olivier
+    if (day.lunch?.olivier && typeof day.lunch.olivier === 'object') {
+      const { lines, items } = parseBdeMealObject(day.lunch.olivier);
+      if (items.length > 0) {
+        olivierMenus.push({
+          date: dateStr,
+          mealType: 'lunch',
+          isOpen: true,
+          lines: lines.length > 0 ? lines : undefined,
+          items,
+        });
+      }
+    }
+
+    // Dîner RI
+    if (day.dinner?.ri && typeof day.dinner.ri === 'object') {
+      const { lines, items } = parseBdeMealObject(day.dinner.ri);
+      if (items.length > 0) {
+        riMenus.push({
+          date: dateStr,
+          mealType: 'dinner',
+          isOpen: true,
+          lines: lines.length > 0 ? lines : undefined,
+          items,
+        });
+      }
+    }
+  }
+
+  return { riMenus, olivierMenus };
+}
+
+function parseBdeMealObject(mealObj: Record<string, any>): { lines: { name: string; items: MenuItem[] }[]; items: MenuItem[] } {
+  const lines: { name: string; items: MenuItem[] }[] = [];
+  const allItems: MenuItem[] = [];
+
+  const sectionMapping: Record<string, { label: string; category: MenuItem['category'] }> = {
+    entree: { label: 'Entrées', category: 'starter' },
+    plat: { label: 'Plats Chauds', category: 'dish' },
+    garniture: { label: 'Accompagnements', category: 'side' },
+    sauce: { label: 'Sauces', category: 'side' },
+    fromage: { label: 'Fromages', category: 'dessert' },
+    dessert: { label: 'Desserts', category: 'dessert' },
+  };
+
+  for (const [key, config] of Object.entries(sectionMapping)) {
+    const list = mealObj[key];
+    if (Array.isArray(list) && list.length > 0) {
+      const sectionItems: MenuItem[] = [];
+      for (const rawName of list) {
+        if (typeof rawName !== 'string' || !rawName.trim()) continue;
+        const { cleanName, labels, points } = extractDietaryLabels(rawName);
+        const item: MenuItem = {
+          name: cleanName,
+          category: config.category,
+          labels,
+          points,
+          line: config.label,
+        };
+        sectionItems.push(item);
+        allItems.push(item);
+      }
+      if (sectionItems.length > 0) {
+        lines.push({ name: config.label, items: sectionItems });
+      }
+    }
+  }
+
+  return { lines, items: allItems };
+}
+
+/**
+ * Récupère les restaurants et leurs menus à jour en interrogeant directement
+ * l'API CROUStillant (Puvis, Archimède, Astrée) et l'API BDE INSA (RI, Olivier)
+ */
 export async function fetchCampusRestaurants(forceRefresh = false): Promise<{
   restaurants: CampusRestaurant[];
   source: 'remote' | 'cache' | 'sample';
@@ -455,7 +645,6 @@ export async function fetchCampusRestaurants(forceRefresh = false): Promise<{
 
   // Si cache valide et pas de forceRefresh
   if (!forceRefresh && diningCache && now - diningCache.fetchedAt < DINING_CACHE_TTL_MS) {
-    // Réactualise l'affluence en temps réel
     const updated = diningCache.restaurants.map((r) => {
       const aff = calculateAffluence(r.id);
       return {
@@ -471,29 +660,87 @@ export async function fetchCampusRestaurants(forceRefresh = false): Promise<{
     };
   }
 
-  // Tenter de joindre l'API BDE INSA
+  const sampleRestaurants = getSampleCampusRestaurants(todayStr);
+
+  const CROUS_TARGETS: { id: RestaurantId; crousId: number }[] = [
+    { id: 'puvis', crousId: 2265 },
+    { id: 'archimede', crousId: 609 },
+    { id: 'astree', crousId: 589 },
+  ];
+
   try {
-    const bdePromise = fetch('https://utils.bde-insa-lyon.fr/menu/data/menu.json', {
-      signal: AbortSignal.timeout(4000),
-      headers: { 'User-Agent': 'INSA-Hub-Webapp/1.0.0' },
+    const crousPromises = CROUS_TARGETS.map(async ({ id, crousId }) => {
+      try {
+        const res = await fetch(`https://api.croustillant.menu/v1/restaurants/${crousId}/menu`, {
+          signal: AbortSignal.timeout(5000),
+          headers: {
+            'User-Agent': 'INSA-Hub-Webapp/1.0.0 (contact@insa-lyon.fr) (+https://insa-hub.vercel.app)',
+            'Accept': 'application/json',
+          },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          return { id, menus: parseCrousMenuData(json) };
+        }
+      } catch {}
+      return { id, menus: [] };
     });
 
-    const [bdeRes] = await Promise.allSettled([bdePromise]);
+    const bdePromise = (async () => {
+      try {
+        const res = await fetch('https://utils.bde-insa-lyon.fr/menu/data/menu.json', {
+          signal: AbortSignal.timeout(5000),
+          headers: { 'User-Agent': 'INSA-Hub-Webapp/1.0.0' },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          return { ok: true, data: json };
+        }
+      } catch {}
+      return { ok: false, data: null };
+    })();
 
-    const sampleRestaurants = getSampleCampusRestaurants(todayStr);
+    const [crousResults, bdeResult] = await Promise.all([
+      Promise.all(crousPromises),
+      bdePromise,
+    ]);
 
-    if (bdeRes.status === 'fulfilled' && bdeRes.value.ok) {
-      const bdeData = (await bdeRes.value.json()) as any;
-      // Intégrer les données du BDE si présentes
-      if (bdeData && typeof bdeData === 'object') {
-        const riRestaurant = sampleRestaurants.find((r) => r.id === 'ri');
-        if (riRestaurant && bdeData.ri) {
-          // Si le BDE renvoie des plats structurés, enrichir le menu du RI
-          enrichRiMenuFromBde(riRestaurant, bdeData.ri, todayStr);
+    let remoteCount = 0;
+
+    // Mise à jour des restaurants CROUS avec les vrais menus
+    for (const { id, menus } of crousResults) {
+      if (menus.length > 0) {
+        remoteCount++;
+        const target = sampleRestaurants.find((r) => r.id === id);
+        if (target) {
+          target.menus = menus;
         }
       }
     }
 
+    // Mise à jour des restaurants INSA avec les données du BDE si disponibles
+    if (bdeResult.ok && bdeResult.data) {
+      remoteCount++;
+      const { riMenus, olivierMenus } = parseBdeMenuData(bdeResult.data);
+      const riTarget = sampleRestaurants.find((r) => r.id === 'ri');
+      const olivierTarget = sampleRestaurants.find((r) => r.id === 'olivier');
+
+      if (riTarget && riMenus.length > 0) {
+        riTarget.menus = riMenus;
+      }
+      if (olivierTarget && olivierMenus.length > 0) {
+        olivierTarget.menus = olivierMenus;
+      }
+    }
+
+    // Actualiser affluence
+    for (const r of sampleRestaurants) {
+      const aff = calculateAffluence(r.id);
+      r.affluenceLevel = aff.level;
+      r.affluenceDescription = aff.description;
+    }
+
+    const source = remoteCount > 0 ? 'remote' : 'sample';
     diningCache = {
       restaurants: sampleRestaurants,
       fetchedAt: now,
@@ -501,7 +748,7 @@ export async function fetchCampusRestaurants(forceRefresh = false): Promise<{
 
     return {
       restaurants: sampleRestaurants,
-      source: 'remote',
+      source,
       fetchedAt: new Date(now).toISOString(),
     };
   } catch (error) {
@@ -512,27 +759,6 @@ export async function fetchCampusRestaurants(forceRefresh = false): Promise<{
       source: 'sample',
       fetchedAt: new Date(now).toISOString(),
     };
-  }
-}
-
-function enrichRiMenuFromBde(riRestaurant: CampusRestaurant, rawRiData: any, todayStr: string) {
-  try {
-    if (Array.isArray(rawRiData.midi)) {
-      const items: MenuItem[] = rawRiData.midi.map((itemStr: string) => {
-        const { cleanName, labels } = extractDietaryLabels(itemStr);
-        return {
-          name: cleanName,
-          category: 'dish',
-          labels,
-        };
-      });
-      const lunchMenu = riRestaurant.menus.find((m) => m.mealType === 'lunch');
-      if (lunchMenu && items.length > 0) {
-        lunchMenu.items = items;
-      }
-    }
-  } catch {
-    // Silencieux en cas de structure inattendue
   }
 }
 

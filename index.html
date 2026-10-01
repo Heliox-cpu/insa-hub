@@ -137,12 +137,12 @@
         <div class="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold mb-2 border border-white/20">
-              <span>📅 Mardi 29 Septembre 2026</span>
+              <span id="banner-date">📅 Jeudi 1 Octobre 2026</span>
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
               <span>Semestre 7 — Département IF</span>
             </div>
             <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Bonjour Alexandre 👋</h1>
-            <p class="text-white/80 text-sm mt-1">Vous avez <strong class="text-white">3 cours aujourd'hui</strong>, le RI sert votre plat préféré à midi, et 2 événements sont prévus ce soir.</p>
+            <p class="text-white/80 text-sm mt-1">Vous avez <strong class="text-white">3 cours aujourd'hui</strong>, le restaurant sert votre plat préféré à midi, et 2 événements sont prévus ce soir.</p>
           </div>
           <button onclick="refreshAll()" class="px-4 py-2.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 font-semibold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95">
             <svg id="sync-icon" class="w-4 h-4 text-insa" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -174,12 +174,12 @@
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer" onclick="switchTab('restaurants')">
           <div class="flex items-center justify-between text-xs text-slate-500 mb-3">
             <span class="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Menu du Midi (RI)
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Menu du Midi (Puvis)
             </span>
             <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Affluence: Faible</span>
           </div>
-          <div class="text-base font-bold text-slate-900 dark:text-white truncate">Curry de Pois Chiches & Riz Basmati</div>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Ligne Végé + Entrecôte grillée (Ligne Monde)</p>
+          <div class="text-base font-bold text-slate-900 dark:text-white truncate">Carry de poisson / Plat du jour</div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Galette chèvre et miel • Riz pilaf & Légumes</p>
         </div>
 
         <!-- Metric 3: Latest Grade -->
@@ -204,10 +204,10 @@
             <span class="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <span class="w-2 h-2 rounded-full bg-purple-500"></span> Événement VA
             </span>
-            <span class="font-mono text-purple-600 dark:text-purple-400 font-bold">20:30</span>
+            <span class="font-mono text-purple-600 dark:text-purple-400 font-bold">19:00</span>
           </div>
-          <div class="text-base font-bold text-slate-900 dark:text-white truncate">Soirée Blind Test Kfet</div>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Organisé par le BdE • Entrée libre</p>
+          <div class="text-base font-bold text-slate-900 dark:text-white truncate">Oktoberfest K-Fêt</div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Organisé par Lorelei INSA • Entrée libre</p>
         </div>
       </div>
 
@@ -324,8 +324,8 @@
             </div>
             <div class="space-y-3 text-xs">
               <div class="border-l-2 border-purple-500 pl-3 py-1">
-                <div class="font-bold text-slate-800 dark:text-slate-200">Blind Test de rentrée</div>
-                <div class="text-slate-500 text-[11px]">Ce soir 20h30 • Kfet INSA</div>
+                <div class="font-bold text-slate-800 dark:text-slate-200">Oktoberfest de rentrée</div>
+                <div class="text-slate-500 text-[11px]">Ce soir 19h00 • K-Fêt INSA</div>
               </div>
               <div class="border-l-2 border-blue-500 pl-3 py-1">
                 <div class="font-bold text-slate-800 dark:text-slate-200">Permanence Billetterie 24h</div>
@@ -369,11 +369,11 @@
         <div class="min-w-[700px]">
           <!-- Day Header -->
           <div class="grid grid-cols-5 gap-3 pb-3 border-b border-slate-200 dark:border-slate-800 text-center font-semibold text-xs text-slate-500">
-            <div class="py-1 rounded-lg">Lundi 28</div>
-            <div class="py-1 rounded-lg bg-red-50 dark:bg-red-950/40 text-insa font-bold">Mardi 29 (Aujourd'hui)</div>
-            <div class="py-1 rounded-lg">Mercredi 30</div>
-            <div class="py-1 rounded-lg">Jeudi 1</div>
-            <div class="py-1 rounded-lg">Vendredi 2</div>
+            <div class="py-1 rounded-lg">Lun 28</div>
+            <div class="py-1 rounded-lg">Mar 29</div>
+            <div class="py-1 rounded-lg">Mer 30</div>
+            <div class="py-1 rounded-lg bg-red-50 dark:bg-red-950/40 text-insa font-bold">Jeu 01 (Aujourd'hui)</div>
+            <div class="py-1 rounded-lg">Ven 02</div>
           </div>
 
           <!-- Days Columns with Course Cards -->
@@ -735,10 +735,10 @@
               <span class="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
                 <span>🎵 Kfet INSA</span>
               </span>
-              <span class="font-semibold text-slate-700 dark:text-slate-300">Ce soir • 20h30</span>
+              <span class="font-semibold text-slate-700 dark:text-slate-300">Ce soir • 19h00</span>
             </div>
-            <h3 class="font-bold text-base text-slate-900 dark:text-white">Soirée Blind Test & Jeux de Société</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Venez tester votre culture musicale par équipe de 4 avec des lots à gagner ! Boissons et planches apéro à prix associatif.</p>
+            <h3 class="font-bold text-base text-slate-900 dark:text-white">Oktoberfest K-Fêt</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Soirée traditionnelle bavaroise organisée par Lorelei INSA ! Bretzels, musique festive et convivialité au rendez-vous.</p>
           </div>
           <div class="p-4 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Entrée libre</span>
@@ -896,6 +896,21 @@
   </div>
 
   <script>
+    // Dynamic Date in French
+    try {
+      const bannerDateEl = document.getElementById('banner-date');
+      if (bannerDateEl) {
+        const frDate = new Intl.DateTimeFormat('fr-FR', {
+          timeZone: 'Europe/Paris',
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        }).format(new Date());
+        bannerDateEl.textContent = '📅 ' + frDate.charAt(0).toUpperCase() + frDate.slice(1);
+      }
+    } catch (_) {}
+
     // Tab switching logic
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));

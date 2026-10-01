@@ -3,77 +3,80 @@ import type { StudentAssociation, VaEvent, VaFilterOptions } from '../../shared/
 export function getSampleVaEvents(): VaEvent[] {
   return [
     {
-      id: 101,
-      title: 'Soirée Blind Test & Jeux de Société',
-      association: 'Club K-Fêt',
+      id: 2743,
+      title: 'Oktoberfest',
+      association: 'Lorelei INSA (K-Fêt)',
       category: 'Soirée',
-      start: '2026-09-29T20:30:00+02:00',
-      end: '2026-09-29T23:30:00+02:00',
-      location: 'Foyer Kfet • Bâtiment Dépt. TC',
-      description: 'Grand blind test musical inter-départements ! Équipes de 3 à 5 personnes. Boissons sans alcool et snacks artisanaux à prix associatif.',
+      start: '2026-10-01T19:00:00+02:00',
+      end: '2026-10-02T01:00:00+02:00',
+      location: 'K-Fêt',
+      description: 'Fête bavaroise avec activités, vente de nourritures et de boissons allemandes pour célébrer l’Oktoberfest ! Au menu : bières, bretzels, currywurst et frites.',
+      ticketingUrl: 'https://www.instagram.com/asso.lorelei/',
       isFree: true,
       price: 'Entrée libre',
     },
     {
-      id: 102,
-      title: 'Tournoi Smash Bros Ultimate & Mario Kart',
-      association: 'Club InsAlgo & Gaming',
-      category: 'Technique & Sciences',
-      start: '2026-09-30T18:30:00+02:00',
-      end: '2026-09-30T22:00:00+02:00',
-      location: 'Maison des Étudiants (MDE) • Salle polyvalente',
-      description: 'Tournoi esport ouvert à toutes les promotions. Lots pour les 3 premiers du tableau principal et du tableau loser.',
-      ticketingUrl: 'https://billetweb.fr/tournoi-insalgo-2026',
-      isFree: false,
-      price: '2€ adhérents / 3€ non-adhérents',
-    },
-    {
-      id: 103,
-      title: 'Séance Cinéma Plein Amphi : Interstellar',
-      association: 'Ciné-Club INSA',
-      category: 'Culture',
-      start: '2026-10-01T20:00:00+02:00',
-      end: '2026-10-01T23:00:00+02:00',
-      location: 'Amphithéâtre Émilie du Châtelet',
-      description: 'Projection 4K sur grand écran avec sonorisation cinéma. Popcorn sucré/salé disponible à l’entrée.',
-      isFree: false,
-      price: '2€ l’entrée (adhésion annuelle 5€)',
-    },
-    {
-      id: 104,
-      title: 'Initiation Rock 6 temps & Pratique Salsa',
-      association: 'Club Rock INSA',
-      category: 'Sport',
-      start: '2026-10-01T20:00:00+02:00',
-      end: '2026-10-01T22:30:00+02:00',
-      location: 'Foyer Génie Industriel (GI)',
-      description: 'Cours débutant complet de 20h à 21h, suivi d’une soirée danse libre tous niveaux. Pas besoin de venir en couple.',
-      isFree: true,
-      price: 'Gratuit',
-    },
-    {
-      id: 105,
-      title: 'Ouverture Billetterie Gala INSA Lyon 2026',
-      association: 'Comité Gala INSA',
-      category: 'Soirée',
-      start: '2026-10-02T12:30:00+02:00',
-      location: 'En ligne sur Shotgun',
-      description: 'Lancement de la première vague de places pour la 37ème édition du Gala de l’INSA Lyon. Thème révélé en direct !',
-      ticketingUrl: 'https://shotgun.live/events/gala-insa-lyon-2026',
-      isFree: false,
-      price: '38€ cotisants / 45€ non-cotisants',
-    },
-    {
-      id: 106,
-      title: 'Atelier Autoréparation Vélo & Marquage Bicycode',
-      association: 'Green INSA & Pignon sur Rue',
+      id: 2725,
+      title: 'Atelier Magnets',
+      association: 'Lézarts',
       category: 'Atelier',
-      start: '2026-10-02T12:00:00+02:00',
-      end: '2026-10-02T14:00:00+02:00',
-      location: 'Pelouse des Humanités (face RI)',
-      description: 'Outils et pièces d’occasion à disposition pour réparer freins, crevaisons et dérailleurs avec l’aide de mécaniciens bénévoles.',
+      start: '2026-10-03T13:30:00+02:00',
+      end: '2026-10-03T16:30:00+02:00',
+      location: 'Résidence B - RdC',
+      description: 'Pour le premier atelier de l’année, les Lézarts vous proposent de fabriquer votre propre magnet en pâte fimo pour décorer votre frigo.',
+      ticketingUrl: 'http://lezarts-insa.odoo.com',
       isFree: true,
-      price: 'Accès libre (pièces à prix coûtant)',
+      price: 'Entrée libre',
+    },
+    {
+      id: 2714,
+      title: 'Stage deb² (2)',
+      association: 'Club Rock',
+      category: 'Atelier',
+      start: '2026-10-04T16:00:00+02:00',
+      end: '2026-10-04T19:00:00+02:00',
+      location: 'Résidence F - RdC',
+      description: 'Stage rapide pour les deb² afin de combler les dernières petites lacunes et pouvoir suivre les cours inter cette année.',
+      isFree: true,
+      price: 'Entrée libre',
+    },
+    {
+      id: 2755,
+      title: 'AG de recrutement CLES-FACIL',
+      association: 'CLES-FACIL',
+      category: 'Animation',
+      start: '2026-10-06T18:15:00+02:00',
+      end: '2026-10-06T19:30:00+02:00',
+      location: 'Amphi Séguin',
+      description: 'Assemblée générale de recrutement du club CLES-FACIL en Amphi Séguin.',
+      ticketingUrl: 'https://cles-facil.org',
+      isFree: true,
+      price: 'Entrée libre',
+    },
+    {
+      id: 2741,
+      title: 'Repas de recrutement',
+      association: 'Les Sang-Culottes',
+      category: 'Animation',
+      start: '2026-10-07T12:00:00+02:00',
+      end: '2026-10-07T14:00:00+02:00',
+      location: 'Résidence B - RdC',
+      description: 'Envie de t’investir, de rencontrer du monde, de proposer des projets ou simplement de découvrir ce qu’on fait ? Tu es la·le bienvenu·e !',
+      ticketingUrl: 'https://www.instagram.com/sangculottesinsa',
+      isFree: true,
+      price: 'Entrée libre',
+    },
+    {
+      id: 2721,
+      title: 'Week-end découverte (WED)',
+      association: 'Club Montagne INSA',
+      category: 'Sport',
+      start: '2026-10-17T06:30:00+02:00',
+      end: '2026-10-18T19:00:00+02:00',
+      location: 'Falaise & Camping',
+      description: 'Activités autour de l’escalade en falaise (initiation et grandes voies) et randonnées en montagne pour tous niveaux.',
+      isFree: false,
+      price: '60€',
     },
   ];
 }
@@ -171,30 +174,65 @@ export async function fetchVaEvents(forceRefresh = false): Promise<{
     const today = new Date().toISOString().slice(0, 10);
     const inTwoMonths = new Date(now + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    const response = await fetch(
+    let response = await fetch(
       `https://portail.asso-insa-lyon.fr/api/v1/events/?since=${today}&until=${inTwoMonths}`,
       {
-        signal: AbortSignal.timeout(4000),
-        headers: { 'User-Agent': 'INSA-Hub-Webapp/1.0.0' },
+        signal: AbortSignal.timeout(5000),
+        headers: { 'User-Agent': 'INSA-Hub-Webapp/1.0.0 (contact@insa-lyon.fr)' },
       }
     );
 
+    // Fallback sans paramètres si l'endpoint filtré échoue
+    if (!response.ok) {
+      response = await fetch('https://portail.asso-insa-lyon.fr/api/v1/events/', {
+        signal: AbortSignal.timeout(5000),
+        headers: { 'User-Agent': 'INSA-Hub-Webapp/1.0.0 (contact@insa-lyon.fr)' },
+      });
+    }
+
     if (response.ok) {
       const data = (await response.json()) as any;
-      if (Array.isArray(data)) {
-        const events: VaEvent[] = data.map((item: any, idx: number) => ({
-          id: item.id || idx + 1,
-          title: item.name || item.title || 'Événement associatif',
-          association: item.association?.name || item.organizer || 'Association INSA',
-          category: item.category || 'Animation',
-          start: item.start || item.start_date || new Date().toISOString(),
-          end: item.end || item.end_date,
-          location: item.location || 'Campus La Doua',
-          description: item.description || '',
-          ticketingUrl: item.ticket_url || item.url,
-          isFree: item.price ? item.price === 0 || item.price === '0' : true,
-          price: item.price ? `${item.price}€` : 'Gratuit',
-        }));
+      if (Array.isArray(data) && data.length > 0) {
+        const events: VaEvent[] = data.map((item: any, idx: number) => {
+          const categoryName = typeof item.type === 'object' && item.type?.name
+            ? item.type.name
+            : (typeof item.category === 'object' && item.category?.name
+                ? item.category.name
+                : (typeof item.category === 'string' ? item.category : 'Animation'));
+
+          const locationName = typeof item.location === 'object' && item.location?.name
+            ? item.location.name
+            : (typeof item.location === 'string' && item.location ? item.location : 'Campus La Doua');
+
+          const startIso = item.begins_at
+            ? (item.begins_at.includes('Z') || item.begins_at.includes('+') ? item.begins_at : `${item.begins_at}+02:00`)
+            : (item.start || item.start_date || new Date().toISOString());
+
+          const endIso = item.ends_at
+            ? (item.ends_at.includes('Z') || item.ends_at.includes('+') ? item.ends_at : `${item.ends_at}+02:00`)
+            : (item.end || item.end_date);
+
+          const hasPrice = Array.isArray(item.prices) && item.prices.length > 0;
+          const priceStr = hasPrice ? `${item.prices[0]}€` : (item.price ? `${item.price}€` : 'Entrée libre');
+          const isFree = !hasPrice && (!item.price || item.price === 0 || item.price === '0');
+
+          return {
+            id: item.id || idx + 1,
+            title: item.name || item.title || 'Événement associatif',
+            association: item.association?.name || item.organizer || 'Association INSA',
+            category: categoryName,
+            start: startIso,
+            end: endIso,
+            location: locationName,
+            description: item.short_description || item.description || '',
+            ticketingUrl: item.website_url || item.ticket_url || item.url,
+            isFree,
+            price: isFree ? 'Entrée libre' : priceStr,
+          };
+        });
+
+        // Trier par date chronologique
+        events.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
         if (!vaCache) {
           vaCache = { events, directory: getSampleStudentAssociations(), fetchedAt: now };
@@ -249,22 +287,28 @@ export async function fetchVaDirectory(forceRefresh = false): Promise<{
 
   try {
     const response = await fetch('https://portail.asso-insa-lyon.fr/api/v1/directory/', {
-      signal: AbortSignal.timeout(4000),
-      headers: { 'User-Agent': 'INSA-Hub-Webapp/1.0.0' },
+      signal: AbortSignal.timeout(5000),
+      headers: { 'User-Agent': 'INSA-Hub-Webapp/1.0.0 (contact@insa-lyon.fr)' },
     });
 
     if (response.ok) {
       const data = (await response.json()) as any;
-      if (Array.isArray(data)) {
-        const directory: StudentAssociation[] = data.map((item: any, idx: number) => ({
-          id: item.id || idx + 1,
-          name: item.name || 'Association INSA',
-          shortName: item.short_name || item.name,
-          category: item.category || 'Général',
-          description: item.description || '',
-          contactEmail: item.email || item.contact,
-          websiteUrl: item.website,
-        }));
+      if (Array.isArray(data) && data.length > 0) {
+        const directory: StudentAssociation[] = data.map((item: any, idx: number) => {
+          const categoryName = typeof item.category === 'object' && item.category?.name
+            ? item.category.name
+            : (typeof item.category === 'string' ? item.category : 'Animation');
+
+          return {
+            id: item.id || idx + 1,
+            name: item.name || 'Association INSA',
+            shortName: item.acronym || item.short_name || item.name,
+            category: categoryName,
+            description: item.short_description || item.description || '',
+            contactEmail: item.email || item.contact || '',
+            websiteUrl: item.website_url || item.website || item.instagram_url || item.facebook_url,
+          };
+        });
 
         if (!vaCache) {
           vaCache = { events: getSampleVaEvents(), directory, fetchedAt: now };

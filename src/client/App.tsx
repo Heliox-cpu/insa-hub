@@ -5,6 +5,60 @@ import type { StudentAcademicRecord } from '../shared/types/mdw.types.js';
 import type { StudentAssociation, VaEvent } from '../shared/types/va.types.js';
 import { apiService } from './services/api.service.js';
 
+export function getParisDateStr(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+export function formatFullFrenchDate(date: Date = new Date()): string {
+  const formatted = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+export interface WeekDayItem {
+  date: string;
+  label: string;
+  isToday: boolean;
+}
+
+export function getCurrentWeekDays(referenceDate: Date = new Date()): WeekDayItem[] {
+  const parisTodayStr = getParisDateStr(referenceDate);
+  const [year, month, day] = parisTodayStr.split('-').map(Number);
+  const baseDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const dayOfWeek = baseDate.getUTCDay();
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(baseDate);
+  monday.setUTCDate(baseDate.getUTCDate() + diffToMonday);
+
+  const days: WeekDayItem[] = [];
+  const dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'];
+
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(monday);
+    d.setUTCDate(monday.getUTCDate() + i);
+    const dStr = d.toISOString().slice(0, 10);
+    const dayNum = String(d.getUTCDate()).padStart(2, '0');
+    const isToday = dStr === parisTodayStr;
+    const shortName = dayNames[i];
+    days.push({
+      date: dStr,
+      label: isToday ? `${shortName} ${dayNum} (Aujourd’hui)` : `${shortName} ${dayNum}`,
+      isToday,
+    });
+  }
+  return days;
+}
+
 type TabId = 'overview' | 'ade' | 'notes' | 'restaurants' | 'va';
 
 export const App: React.FC = () => {
@@ -21,10 +75,14 @@ export const App: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // Semaine et Date dynamique
+  const weekDays = useMemo(() => getCurrentWeekDays(), []);
+  const todayParisStr = useMemo(() => getParisDateStr(), []);
+
   // Données des 4 services
   const [adeEvents, setAdeEvents] = useState<AdeCourseEvent[]>([]);
   const [freeSlots, setFreeSlots] = useState<FreeTimeSlot[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>('2026-09-29');
+  const [selectedDate, setSelectedDate] = useState<string>(() => getParisDateStr());
   const [restaurants, setRestaurants] = useState<CampusRestaurant[]>([]);
   const [selectedRestoId, setSelectedRestoId] = useState<RestaurantId>('ri');
   const [selectedMealType, setSelectedMealType] = useState<'lunch' | 'dinner'>('lunch');
@@ -149,11 +207,65 @@ export const App: React.FC = () => {
     return restaurants.find((r) => r.id === selectedRestoId) || restaurants[0];
   }, [restaurants, selectedRestoId]);
 
-  // Menu du restaurant sélectionné selon le type de repas
+  // Menu du restaurant sélectionné selon le type de repas et la date
   const currentMealMenu = useMemo(() => {
     if (!currentRestaurant) return null;
-    return currentRestaurant.menus.find((m) => m.mealType === selectedMealType) || currentRestaurant.menus[0] || null;
-  }, [currentRestaurant, selectedMealType]);
+    const exactMatch = currentRestaurant.menus.find(
+      (m) => m.date === selectedDate && m.mealType === selectedMealType
+    );
+    if (exactMatch) return exactMatch;
+
+    const dateMatchedAnyMeal = currentRestaurant.menus.find((m) => m.date === selectedDate);
+    if (!dateMatchedAnyMeal) {
+      const hasAnyDatedMenus = currentRestaurant.menus.some((m) => m.date && m.date.length === 10);
+      if (!hasAnyDatedMenus) {
+        return currentRestaurant.menus.find((m) => m.mealType === selectedMealType) || currentRestaurant.menus[0] || null;
+      }
+      return null;
+    }
+    return null;
+  }, [currentRestaurant, selectedMealType, selectedDate]);
+
+  // Déjeuner mis en avant sur la vue d'ensemble (Overview)
+  const lunchOverview = useMemo(() => {
+    const resto = restaurants.find((r) => r.id === selectedRestoId) || restaurants[0];
+    const lunchMenu = resto?.menus.find((m) => m.date === selectedDate && m.mealType === 'lunch')
+      || (resto && !resto.menus.some((m) => m.date && m.date.length === 10) ? resto.menus.find((m) => m.mealType === 'lunch') : null);
+
+    if (lunchMenu && lunchMenu.items && lunchMenu.items.length > 0) {
+      return {
+        restoName: resto.name,
+        mainDish: lunchMenu.items[0]?.name,
+        subText: lunchMenu.items[1]?.name || `${lunchMenu.items.length} plats proposés`,
+        affluence: resto.affluenceDescription?.split('(')[0] || 'Modérée',
+      };
+    }
+
+    for (const r of restaurants) {
+      const m = r.menus.find((menu) => menu.date === selectedDate && menu.mealType === 'lunch');
+      if (m && m.items && m.items.length > 0) {
+        return {
+          restoName: r.name,
+          mainDish: m.items[0]?.name,
+          subText: m.items[1]?.name || `${m.items.length} plats proposés`,
+          affluence: r.affluenceDescription?.split('(')[0] || 'Modérée',
+        };
+      }
+    }
+
+    return {
+      restoName: resto?.name || 'Restaurant Campus',
+      mainDish: 'Menu en attente de publication',
+      subText: 'Consultez les horaires et l’affluence en direct',
+      affluence: resto?.affluenceDescription?.split('(')[0] || 'Information campus',
+    };
+  }, [restaurants, selectedRestoId, selectedDate]);
+
+  // Prochain événement associatif pour l'aperçu
+  const nextVaEvent = useMemo(() => {
+    if (vaEvents.length === 0) return null;
+    return vaEvents[0];
+  }, [vaEvents]);
 
   // Semestre sélectionné
   const currentSemesterTranscript = useMemo(() => {
@@ -462,7 +574,7 @@ export const App: React.FC = () => {
               <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold mb-2 border border-white/20">
-                    <span>📅 Mardi 29 Septembre 2026</span>
+                    <span>📅 {formatFullFrenchDate()}</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                     <span>{casConnected && academicRecord ? academicRecord.program : 'Portail Étudiant INSA'}</span>
                   </div>
@@ -540,17 +652,17 @@ export const App: React.FC = () => {
               >
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
                   <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Menu du Midi (RI)
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Menu du Midi ({lunchOverview.restoName})
                   </span>
                   <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
-                    {currentRestaurant?.affluenceDescription?.split('(')[0] || 'Modérée'}
+                    {lunchOverview.affluence}
                   </span>
                 </div>
                 <div className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-red-500 transition-colors">
-                  {currentMealMenu?.items?.[0]?.name || 'Menu du Restaurant INSA'}
+                  {lunchOverview.mainDish}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                  {currentMealMenu?.items?.[1]?.name || 'Ligne Végé & Traditionnelle disponibles'}
+                  {lunchOverview.subText}
                 </p>
               </div>
 
@@ -609,15 +721,19 @@ export const App: React.FC = () => {
               >
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
                   <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-purple-500"></span> Soirée Asso (VA)
+                    <span className="w-2 h-2 rounded-full bg-purple-500"></span> Vie Associative (VA)
                   </span>
-                  <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">20:30</span>
+                  <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">
+                    {nextVaEvent ? nextVaEvent.start.slice(11, 16) : '--:--'}
+                  </span>
                 </div>
                 <div className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-red-500 transition-colors">
-                  {vaEvents[0]?.title || 'Blind Test K-Fêt'}
+                  {nextVaEvent ? nextVaEvent.title : 'Aucun événement prévu'}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                  {vaEvents[0]?.association || 'Club K-Fêt'} • Entrée libre
+                  {nextVaEvent
+                    ? `${nextVaEvent.association} • ${nextVaEvent.isFree ? 'Entrée libre' : nextVaEvent.price}`
+                    : 'Consultez les événements et clubs du campus'}
                 </p>
               </div>
 
@@ -669,37 +785,80 @@ export const App: React.FC = () => {
               <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>🍽️</span> Menu du Restaurant INSA (RI)
+                    <span>🍽️</span> Menu du {lunchOverview.restoName} ({selectedDate})
                   </h2>
                   <button onClick={() => setActiveTab('restaurants')} className="text-xs text-red-500 hover:underline font-semibold">
                     Tous les restos →
                   </button>
                 </div>
-                {currentMealMenu?.lines ? (
-                  <div className="space-y-3">
-                    {currentMealMenu.lines.map((line, idx) => (
-                      <div key={idx} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/50">
-                        <span className="text-xs font-bold text-[#E42313] dark:text-red-400">{line.name}</span>
-                        <div className="mt-1 space-y-1">
-                          {line.items.map((it, i) => (
-                            <div key={i} className="text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                              <span className="truncate">{it.name}</span>
-                              <div className="flex gap-1">
-                                {it.labels.map((l) => (
-                                  <span key={l} className="text-[9px] px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold">
-                                    {l}
-                                  </span>
-                                ))}
-                              </div>
+                {(() => {
+                  const resto = restaurants.find((r) => r.name === lunchOverview.restoName)
+                    || restaurants.find((r) => r.id === selectedRestoId)
+                    || restaurants[0];
+                  const menu = resto?.menus.find((m) => m.date === selectedDate && m.mealType === 'lunch')
+                    || (resto && !resto.menus.some((m) => m.date && m.date.length === 10) ? resto.menus.find((m) => m.mealType === 'lunch') : null);
+
+                  if (menu?.lines && menu.lines.length > 0) {
+                    return (
+                      <div className="space-y-3">
+                        {menu.lines.map((line, idx) => (
+                          <div key={idx} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/50">
+                            <span className="text-xs font-bold text-[#E42313] dark:text-red-400">{line.name}</span>
+                            <div className="mt-1 space-y-1">
+                              {line.items.map((it, i) => (
+                                <div key={i} className="text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                                  <span className="truncate">{it.name}</span>
+                                  <div className="flex gap-1">
+                                    {it.labels.map((l) => (
+                                      <span key={l} className="text-[9px] px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold">
+                                        {l}
+                                      </span>
+                                    ))}
+                                    {it.points && (
+                                      <span className="text-[9px] px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold">
+                                        {it.points} pts
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 text-center py-6">Menu en cours d'actualisation...</p>
-                )}
+                    );
+                  }
+
+                  if (menu?.items && menu.items.length > 0) {
+                    return (
+                      <div className="space-y-2">
+                        {menu.items.map((it, i) => (
+                          <div key={i} className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/50 flex items-center justify-between text-xs">
+                            <span className="text-slate-800 dark:text-slate-200 font-medium truncate">{it.name}</span>
+                            <div className="flex gap-1">
+                              {it.labels.map((l) => (
+                                <span key={l} className="text-[9px] px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold">
+                                  {l}
+                                </span>
+                              ))}
+                              {it.points && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold">
+                                  {it.points} pts
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="text-center py-6 text-xs text-slate-500">
+                      Menu en attente de publication pour cette date.
+                    </div>
+                  );
+                })()}
               </div>
 
             </div>
@@ -732,13 +891,7 @@ export const App: React.FC = () => {
 
             {/* Sélecteur de date (Jours de la semaine) */}
             <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-              {[
-                { date: '2026-09-28', label: 'Lun 28' },
-                { date: '2026-09-29', label: 'Mar 29 (Aujourd’hui)' },
-                { date: '2026-09-30', label: 'Mer 30' },
-                { date: '2026-10-01', label: 'Jeu 01' },
-                { date: '2026-10-02', label: 'Ven 02' },
-              ].map((item) => (
+              {weekDays.map((item) => (
                 <button
                   key={item.date}
                   onClick={() => setSelectedDate(item.date)}
@@ -1027,6 +1180,23 @@ export const App: React.FC = () => {
               </div>
             </div>
 
+            {/* Sélecteur de date (Jours de la semaine) */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+              {weekDays.map((item) => (
+                <button
+                  key={item.date}
+                  onClick={() => setSelectedDate(item.date)}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                    selectedDate === item.date
+                      ? 'bg-[#E42313] text-white shadow-md'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
             {/* Onglets des restaurants */}
             <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
               {restaurants.map((r) => (
@@ -1149,7 +1319,13 @@ export const App: React.FC = () => {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500 text-center py-8">Aucun repas disponible pour ce créneau.</p>
+                  <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+                    <span className="text-3xl">🍽️</span>
+                    <h4 className="mt-2 text-xs font-bold text-slate-700 dark:text-slate-300">Aucun menu publié pour le {selectedDate}</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                      Le menu de ce service n'a pas encore été communiqué ou l'établissement est fermé.
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -1228,82 +1404,104 @@ export const App: React.FC = () => {
 
             {/* Vue Événements */}
             {vaTabMode === 'events' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredVaEvents.map((evt) => (
-                  <div
-                    key={evt.id}
-                    className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between hover:border-red-400/50 transition-all"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-2">
-                        <span className="font-semibold text-[#E42313] dark:text-red-400 truncate">{evt.association}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 font-medium">
-                          {evt.category}
-                        </span>
+              filteredVaEvents.length === 0 ? (
+                <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                  <span className="text-3xl">🎉</span>
+                  <h3 className="mt-2 text-sm font-bold text-slate-800 dark:text-slate-200">Aucun événement associatif trouvé</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {vaSearch.trim() || vaCategory !== 'Tous'
+                      ? 'Aucun événement ne correspond à vos filtres actuels.'
+                      : 'Aucun événement associatif à venir pour le moment.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredVaEvents.map((evt) => (
+                    <div
+                      key={evt.id}
+                      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between hover:border-red-400/50 transition-all"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between text-xs mb-2">
+                          <span className="font-semibold text-[#E42313] dark:text-red-400 truncate">{evt.association}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 font-medium">
+                            {evt.category}
+                          </span>
+                        </div>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">{evt.title}</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-3">{evt.description}</p>
                       </div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">{evt.title}</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-3">{evt.description}</p>
-                    </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                      <div className="text-slate-500">
-                        <div>📅 {evt.start.slice(0, 10)} • {evt.start.slice(11, 16)}</div>
-                        <div className="truncate max-w-[160px]">📍 {evt.location}</div>
+                      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                        <div className="text-slate-500">
+                          <div>📅 {evt.start.slice(0, 10)} • {evt.start.slice(11, 16)}</div>
+                          <div className="truncate max-w-[160px]">📍 {evt.location}</div>
+                        </div>
+                        {evt.ticketingUrl ? (
+                          <a
+                            href={evt.ticketingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 rounded-lg bg-[#E42313] hover:bg-red-600 text-white font-semibold text-[11px] shadow-sm transition-all"
+                          >
+                            Billetterie
+                          </a>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[11px]">
+                            {evt.price || 'Gratuit'}
+                          </span>
+                        )}
                       </div>
-                      {evt.ticketingUrl ? (
-                        <a
-                          href={evt.ticketingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1.5 rounded-lg bg-[#E42313] hover:bg-red-600 text-white font-semibold text-[11px] shadow-sm transition-all"
-                        >
-                          Billetterie
-                        </a>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[11px]">
-                          {evt.price || 'Gratuit'}
-                        </span>
-                      )}
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
 
             {/* Vue Annuaire */}
             {vaTabMode === 'directory' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredVaDirectory.map((asso) => (
-                  <div
-                    key={asso.id}
-                    className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-2">
-                        <span className="font-bold text-xs text-slate-900 dark:text-white">{asso.shortName || asso.name}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-semibold">
-                          {asso.category}
-                        </span>
+              filteredVaDirectory.length === 0 ? (
+                <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                  <span className="text-3xl">🏢</span>
+                  <h3 className="mt-2 text-sm font-bold text-slate-800 dark:text-slate-200">Aucune association trouvée</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Vérifiez l'orthographe du nom ou du sigle recherché.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredVaDirectory.map((asso) => (
+                    <div
+                      key={asso.id}
+                      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between text-xs mb-2">
+                          <span className="font-bold text-xs text-slate-900 dark:text-white">{asso.shortName || asso.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-semibold">
+                            {asso.category}
+                          </span>
+                        </div>
+                        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{asso.name}</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-3">{asso.description}</p>
                       </div>
-                      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{asso.name}</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-3">{asso.description}</p>
-                    </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                      {asso.contactEmail ? (
-                        <a href={`mailto:${asso.contactEmail}`} className="text-blue-500 hover:underline truncate">
-                          ✉️ {asso.contactEmail}
-                        </a>
-                      ) : <span />}
-                      {asso.websiteUrl && (
-                        <a href={asso.websiteUrl} target="_blank" rel="noreferrer" className="text-red-500 hover:underline font-semibold">
-                          Site Web →
-                        </a>
-                      )}
+                      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                        {asso.contactEmail ? (
+                          <a href={`mailto:${asso.contactEmail}`} className="text-blue-500 hover:underline truncate">
+                            ✉️ {asso.contactEmail}
+                          </a>
+                        ) : <span />}
+                        {asso.websiteUrl && (
+                          <a href={asso.websiteUrl} target="_blank" rel="noreferrer" className="text-red-500 hover:underline font-semibold">
+                            Site Web →
+                          </a>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
 
           </div>
